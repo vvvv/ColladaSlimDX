@@ -2,7 +2,7 @@
 Microsoft Visual Studio Solution File, Format Version 9.00
 # Visual Studio 2005
 # SharpDevelop 2.2.1.2648
-Project("{F57dC0B0-A532-11DD-AD8B-0800200C9A66}") = "Collada", "Collada.csproj", "{2C3DD320-A532-11DD-AD8B-0800200C9A66}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ColladaSlimDX", "ColladaSlimDX.csproj", "{2C3DD320-A532-11DD-AD8B-0800200C9A66}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
