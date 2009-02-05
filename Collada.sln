@@ -1,0 +1,18 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 9.00
+# Visual Studio 2005
+# SharpDevelop 2.2.1.2648
+Project("{F57dC0B0-A532-11DD-AD8B-0800200C9A66}") = "Collada", "Collada.csproj", "{2C3DD320-A532-11DD-AD8B-0800200C9A66}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2C3DD320-A532-11DD-AD8B-0800200C9A66}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C3DD320-A532-11DD-AD8B-0800200C9A66}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C3DD320-A532-11DD-AD8B-0800200C9A66}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C3DD320-A532-11DD-AD8B-0800200C9A66}.Release|Any CPU.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+EndGlobal
