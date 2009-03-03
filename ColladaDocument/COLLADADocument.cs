@@ -611,7 +611,7 @@ namespace VVVV.Collada.ColladaDocument
 
                 foreach (Param param in parameters)
                 {
-                    if (param.name != null) paramIndex.Add(index); // ignore un-named parameters
+                    if (param.name != null || param.type != null) paramIndex.Add(index); // ignore un-named parameters
                     index ++;
                 }
             }
@@ -683,6 +683,9 @@ namespace VVVV.Collada.ColladaDocument
                             arrayType = child.Name;
                             break;
                         case "IDREF_array":
+                            array = new Array<string>(doc, child);
+                            arrayType = child.Name;
+                            break;
                         case "Name_array":
                             array = new Array<string>(doc, child);
                             arrayType = child.Name;
@@ -1824,7 +1827,7 @@ namespace VVVV.Collada.ColladaDocument
             }
             public VertexWeights vertexWeights;
             public List<Extra> extras;
-            Matrix bindShapeMatrix;
+            public Matrix bindShapeMatrix;
 
             public Skin(Document doc, XmlNode node)
             {
