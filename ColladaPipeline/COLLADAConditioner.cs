@@ -131,7 +131,7 @@ namespace VVVV.Collada.ColladaPipeline
                     foreach (string i in channelFlags) 
                         channelCount[i] = 0;
 
-                    foreach (Document.Input input in COLLADAUtil.getAllInputs(doc, primitive))
+                    foreach (Document.Input input in COLLADAUtil.GetAllInputs(primitive))
                     {
                         channelCount[input.semantic]++;
                     }
@@ -161,7 +161,7 @@ namespace VVVV.Collada.ColladaPipeline
                     foreach (string i in channelFlags) 
                         inputs[i] = new List<Document.Input>();
 
-                    foreach (Document.Input input in COLLADAUtil.getAllInputs(doc, primitive))
+                    foreach (Document.Input input in COLLADAUtil.GetAllInputs(primitive))
                         inputs[input.semantic].Add(input);
 
                     indexes = new List<int>();

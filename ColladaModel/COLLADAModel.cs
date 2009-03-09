@@ -139,6 +139,7 @@ namespace VVVV.Collada.ColladaModel
                 streamOffset = 0; // selection which input stream to use
                 startIndex = 0; // first index element to read
                 baseVertex = 0; // vertex buffer offset to add to each element of the index buffer
+                vertexStride = 0;
 
                 vertexElements = new List<VertexElement>();
                 short deltaOffset = 0;
@@ -149,7 +150,7 @@ namespace VVVV.Collada.ColladaModel
                 DeclarationUsage vertexElementUsage;
                 byte usageIndex;
 
-                foreach (Document.Input input in COLLADAUtil.getAllInputs(doc, primitive))
+                foreach (Document.Input input in COLLADAUtil.GetAllInputs(primitive))
                 {
 
                     switch (input.semantic)
@@ -187,10 +188,12 @@ namespace VVVV.Collada.ColladaModel
                         case 2:
                             vertexElementFormat = DeclarationType.Float2;
                             deltaOffset = 2 * 4;
+                            vertexStride += 2;
                             break;
                         case 3:
                             vertexElementFormat = DeclarationType.Float3;
                             deltaOffset = 3 * 4;
+                            vertexStride += 3;
                             break;
                         default:
                             throw new Exception("Unexpected vertexElementFormat");
@@ -206,8 +209,6 @@ namespace VVVV.Collada.ColladaModel
 
                     offset += deltaOffset;
                 } // foreach input
-
-                vertexStride = (short) (offset / 4);
 
                 indexArray = new int[primitive.p.Length];
 
@@ -232,49 +233,20 @@ namespace VVVV.Collada.ColladaModel
         [Serializable()]
         public class CMesh
         {
-            // Summary:
-            //     Gets the Framework.BoundingSphere that contains this mesh.
-            //
-            // Returns:
-            //     The Framework.BoundingSphere that contains this mesh.
-            public BoundingSphere BoundingSphere { get { return boundingSphere; } }
-            private BoundingSphere boundingSphere;
-
-            // Summary:
-            //     Gets a collection of effects associated with this mesh.
-            //
-            // Returns:
-            //     A collection of effects associated with this mesh.
-            //public List<Effect> Effects { get { return effects; } set { effects = value; } }
-            //private List<Effect> effects;
-
-            //
-            // provided by each MeshPart
-            //public IndexBuffer IndexBuffer { get; }
-
-            // Summary:
-            //     Gets the ModelMeshPart objects that make up this mesh.
-            //
-            // Returns:
-            //     The ModelMeshPart objects that make up this mesh.
-            public List<Model.CMeshPart> MeshParts { get { return meshParts; } }
-            private List<Model.CMeshPart> meshParts; 
-            
-            //
-            // provided by InstanceMesh
-            //public Model.ModelBone ParentBone { get { return parentBone; } set { parentBone = value; } }
-            //private Model.ModelBone parentBone;
-            //
-            // Summary:
-            //     Gets or sets an object identifying this mesh.
-            //
-            // Returns:
-            //     An object identifying this mesh.
-            public object Tag { get { return tag; } set {tag=value;} }
-            private object tag;
+        	private Document.Geometry geo;
+        	public Document.Geometry Geo { get { return geo; } }
+        	
+            public List<Document.Primitive> Primitives { get { return primitives; } }
+            private List<Document.Primitive> primitives = new List<Document.Primitive>();
             
             private float[] vertexArray;
             public float[] VertexArray { get { return vertexArray; } }
+            
+            private int[] indexArray;
+            public int[] IndexArray { get { return indexArray; } }
+            
+            public List<VertexElement> VertexElements { get { return vertexElements; } }
+            private List<VertexElement> vertexElements = new List<VertexElement>();
             
             private int faceCount = 0;
             public int FaceCount { get { return faceCount; } }
@@ -282,107 +254,188 @@ namespace VVVV.Collada.ColladaModel
             private int vertexCount = 0;
             public int VertexCount { get { return vertexCount; } }
             
-            private short vertexStride = 1;
+            private short vertexStride = 0;
             public short VertexStride { get { return vertexStride; } }
+            
+            // Describes a mapping from final vertex buffer position to original
+            // position in vertex source array defined by collada.
+            private int[] invVertexMapping;
+            protected int[] InvVertexMapping { get { return invVertexMapping; } }
      
-            //  see InstancedMesh.Draw
-            //public void Draw(); 
-
-            // Summary:
-            //     Draws all the ModelMeshPart objects in this mesh, using their current ModelMeshPart.Effect
-            //     settings, and specifying options for saving effect state.
-            //
-            // Parameters:
-            //   saveStateMode:
-            //     The save state options to pass to each ModelMeshPart.Effect.
-            //public void Draw(SaveStateMode saveStateMode);
-
-            // Summary:
-            //     Initializes a new instance of Model.
-            // This will work only if the COLLADA geometry has been processed for vertex array
-            // Parameters:
-            //   _document:
-            //      The collada document
-            //   geo:
-            //      The (pre-processed) geometry to be converted in a Model
             public CMesh(Model model, Document.Geometry geo) 
             {
+            	this.geo = geo;
                 Document doc = model.Doc;
 
-                // check all geometry inputs for vertexArray format
                 bool first = true;
-
-                meshParts = new List<Model.CMeshPart>();
+                
+                int vertexIndex = 0;
+                List<int> indexBuffer = new List<int>();
+                List<float> vertexBuffer = new List<float>();
+                List<int> invVertexMappingList = new List<int>();
+                Dictionary<string, int> mapping = new Dictionary<string, int>();
+                List<float> tempValues = new List<float>();
                 foreach (Document.Primitive primitive in geo.mesh.primitives)
                 {
-                    // Test to make sure the 'vertexBuffer' conditionner worked
-                    if (first)
+                	// Skip non-triangle primitives
+                	if (!(primitive is Document.Triangle))
+                	{
+                		// Display a warning
+                		COLLADAUtil.Log(COLLADALogType.Warning, "Skipping part of geometry '" + geo.id + "'! Make sure all primitives are triangles.");
+                		continue;
+                	}
+                	
+                	#region vertex declaration
+                	// Take the first primitive and use its inputs to build the 
+		            // vertex declaration and a dictionary to describe a mapping
+		            // of n source/p_index pairs to one index in the vertex buffer.
+		            // TODO: for now we assume that all primitives have the same
+		            // inputs in equal order.
+		            if (first)
+		            {
+		            	first = false;
+		            	
+		            	short deltaOffset = 0;
+		                short offset = 0;
+		                short streamOffset = 0;
+		
+		                DeclarationType vertexElementFormat;
+		                DeclarationUsage vertexElementUsage;
+		                byte usageIndex;
+		            	foreach (Document.Input input in COLLADAUtil.GetAllInputs(primitive))
+		            	{
+		                    switch (input.semantic)
+		                    {
+		                        case "POSITION":
+		                            vertexElementUsage = DeclarationUsage.Position;
+		                            usageIndex = 0;
+		                            break;
+		                        case "NORMAL":
+		                            vertexElementUsage = DeclarationUsage.Normal;
+		                            usageIndex = 0;
+		                            break;
+		                        case "COLOR":
+		                            vertexElementUsage = DeclarationUsage.Color;
+		                            usageIndex = 0;
+		                            break;
+		                        case "TEXCOORD":
+		                            vertexElementUsage = DeclarationUsage.TextureCoordinate;
+		                            usageIndex = 0; // TODO handle several texture (need to replace BasicMaterial first)
+		                            break;
+		                        case "TEXTANGENT":
+		                        case "TEXBINORMAL":
+		                            vertexElementUsage = DeclarationUsage.Color; // Whatever, just for C# to stop complaining
+		                            usageIndex = 0; // Whatever
+		                            break;
+		                        default:
+		                            throw new Exception("Unexeptected vertexElementUsage=" + input.semantic);
+		                    }
+		
+		                    // assuming floats !
+		                    switch (((Document.Source)input.source).accessor.ParameterCount)
+		                    {
+		                        case 2:
+		                            vertexElementFormat = DeclarationType.Float2;
+		                            deltaOffset = 2 * 4;
+		                            vertexStride += 2;
+		                            break;
+		                        case 3:
+		                            vertexElementFormat = DeclarationType.Float3;
+		                            deltaOffset = 3 * 4;
+		                            vertexStride += 3;
+		                            break;
+		                        default:
+		                            throw new Exception("Unexpected vertexElementFormat");
+		
+		                    }
+		                    
+		                    vertexElements.Add(new VertexElement(streamOffset /* stream */,
+		                                                         offset  /* offset */,
+		                                                         vertexElementFormat,
+		                                                         DeclarationMethod.Default,
+		                                                         vertexElementUsage,
+		                                                         usageIndex));
+		
+		                    offset += deltaOffset;
+		            	}
+		            }
+		            #endregion
+		            
+                	// Build vertex and index array
+                	for (int v = 0; v < primitive.count * 3; v++)
+                	{
+                		int positionIndex = 0;
+                		string indexKey = "";
+                		tempValues.Clear();
+                		
+                		foreach (Document.Input input in COLLADAUtil.GetAllInputs(primitive))
+                		{
+                			// Get index into source array of this input for this triangle t
+                			int index = COLLADAUtil.GetPValue(input, primitive, v);
+                			
+                			// Save index of position array for later inverse mapping
+                			if (input.semantic == "POSITION")
+                				positionIndex = index;
+                			
+                			// Build key out of all indices for later lookup
+                			indexKey += index + ",";
+                			// Get values this index is referencing
+                			float[] values = COLLADAUtil.GetSourceElement(doc, input, index);
+                			// Add the values to temporary storage
+                			tempValues.AddRange(values);
+                		}
+                		
+                		// Add this combination of inputs to the vertex buffer
+                		if (mapping.ContainsKey(indexKey))
+                			indexBuffer.Add(mapping[indexKey]);
+                		else
+                		{
+                			mapping[indexKey] = vertexIndex;
+                			indexBuffer.Add(vertexIndex);
+                			vertexBuffer.AddRange(tempValues);
+                			// Inverse mapping of vertex buffer index to index of original array
+                			invVertexMappingList.Add(positionIndex);
+                			// Increment index of vertex buffer
+                			vertexIndex++;
+                		}
+                	}
+                	
+                	primitives.Add(primitive);
+                	
+                	faceCount += primitive.count;
+                }
+                
+                vertexCount = vertexIndex;
+                
+                indexArray = indexBuffer.ToArray();
+                vertexArray = vertexBuffer.ToArray();
+                invVertexMapping = invVertexMappingList.ToArray();
+                
+                // Reverse triangle order for DirectX
+                for (int i = 0; i < indexArray.Length; i += 3)
+                {
+                	int swap = indexArray[i];
+                	indexArray[i] = indexArray[i + 2];
+                	indexArray[i + 2] = swap;
+                }
+                
+                // Reverse texture 'T' coordinate for DirectX
+                foreach (VertexElement vertexElement in VertexElements)
+                {
+                    if (vertexElement.Usage == DeclarationUsage.TextureCoordinate)
                     {
-                        Dictionary<String, Document.Input> inputs = new Dictionary<string, Document.Input>();
-                        foreach (Document.Input input in COLLADAUtil.getAllInputs(doc, primitive))
-                        {
-                            if (inputs.ContainsKey(input.semantic))
-                            {
-                            	//throw new Exception("Cannot handle multiple " + input.semantic + " case in Model");
-                            }
-                            else
-                            {
-                                inputs[input.semantic] = input;
-                                if (input.semantic == "POSITION")
-                                {
-                                	float[] sourceVertexArray = ((Document.Array<float>) ((Document.Source) input.source).array).arr;
-                                	vertexArray = new float[sourceVertexArray.Length];
-                                	Array.Copy(sourceVertexArray, vertexArray, vertexArray.Length);
-                                }
-                                else
-                                    if (((Document.Source)input.source).array != null)
-                                        throw new Exception("Model was *not* transformed in vertexArray by Reindexor or equivalent conditioner");
-                            }
-                        }
-                    }
-
-                    // Create meshes
-                    CMeshPart meshPart = new CMeshPart(doc, primitive);
-                    meshParts.Add( meshPart );
-                    faceCount += meshPart.PrimitiveCount;
-                    vertexCount += meshPart.NumVertices;
-                    vertexStride = meshPart.VertexStride;
-
-                    // Reverse texture 'T' coordinate for Direct X.
-                    if (first)
-                    {
-                        foreach (VertexElement vertexElement in meshPart.VertexElements)
-                        {
-                            if (vertexElement.Usage == DeclarationUsage.TextureCoordinate)
-                            {
-                                for (int i = 0; i < meshPart.NumVertices; i++)
-                                    vertexArray[i * meshPart.VertexStride + vertexElement.Offset / 4 + 1] =
-                                        1.0f - vertexArray[i * meshPart.VertexStride + vertexElement.Offset / 4 + 1];
-                            }
-                        }
-                        first = false;
+                        for (int i = 0; i < vertexCount; i++)
+                            vertexArray[i * VertexStride + vertexElement.Offset / 4 + 1] =
+                                1.0f - vertexArray[i * VertexStride + vertexElement.Offset / 4 + 1];
                     }
                 }
                 
-                // calculate bounding sphere
-                Document.Input positionInput = COLLADAUtil.GetPositionInput(geo.mesh);
-                List<Vector3> points = new List<Vector3>();
-                int positionCount = ((Document.Source)positionInput.source).accessor.count;
-                for (int i = 0; i < positionCount; i++)
-                {
-                    float[] values = COLLADAUtil.GetSourceElement(doc,positionInput, i);
-                    points.Add(new Vector3(values[0],values[1],values[2]));
-                }
-                if (points.Count > 0)
-	                boundingSphere = BoundingSphere.FromPoints(points.ToArray());
+                FinalizeVertexDeclaration(vertexElements);
             }
             
-            public Mesh create3D9Mesh(Device graphicsDevice, ref int attribId)
+            public virtual Mesh Create3D9Mesh(Device graphicsDevice, ref int attribId)
             {
-            	List<VertexElement> vertexElements = getVertexDeclaration();
-            	vertexElements.Add(VertexElement.VertexDeclarationEnd);
-            	
-            	Mesh mesh = new Mesh(graphicsDevice, FaceCount, VertexCount, MeshFlags.Use32Bit | MeshFlags.Managed, vertexElements.ToArray());
+            	Mesh mesh = new Mesh(graphicsDevice, FaceCount, VertexCount, MeshFlags.Use32Bit | MeshFlags.Managed, VertexElements.ToArray());
             	fillVertexBuffer(mesh);
             	fillIndexBuffer(mesh);
             	fillAttributeBuffer(mesh, ref attribId);
@@ -391,13 +444,9 @@ namespace VVVV.Collada.ColladaModel
             	return mesh;
             }
             
-            protected virtual List<VertexElement> getVertexDeclaration()
+            protected virtual void FinalizeVertexDeclaration(List<VertexElement> vertexElements)
             {
-            	// assuming that all mesh parts have the same vertex declaration
-            	List<VertexElement> vertexElements = new List<VertexElement>();
-            	if (meshParts.Count > 0)
-            		vertexElements.AddRange(meshParts[0].VertexElements);
-            	return vertexElements;
+            	vertexElements.Add(VertexElement.VertexDeclarationEnd);
             }
             
             protected virtual void fillVertexBuffer(Mesh mesh)
@@ -409,18 +458,8 @@ namespace VVVV.Collada.ColladaModel
             
             protected virtual void fillIndexBuffer(Mesh mesh)
             {
-            	int vertexCount = vertexArray.Length;
-            	int[] indexArray = new int[0];
-            	
-            	foreach (Model.CMeshPart meshPart in meshParts)
-            	{
-            		int old_length = indexArray.Length;
-            		Array.Resize(ref indexArray, indexArray.Length + meshPart.IndexArray.Length);
-            		Array.ConstrainedCopy(meshPart.IndexArray, 0, indexArray, old_length, meshPart.IndexArray.Length);
-            	}
-            	
             	DataStream ds = mesh.LockIndexBuffer(LockFlags.None);
-            	ds.WriteRange(indexArray);
+            	ds.WriteRange(IndexArray);
             	mesh.UnlockIndexBuffer();
             }
             
@@ -431,9 +470,9 @@ namespace VVVV.Collada.ColladaModel
             	int faceStart = 0;
             	int faceEnd = 0;
             	
-            	foreach (Model.CMeshPart meshPart in meshParts)
+            	foreach (Document.Primitive primitive in Primitives)
             	{
-            		faceEnd = faceStart + meshPart.PrimitiveCount;
+            		faceEnd = faceStart + primitive.count;
             		for (int i = faceStart; i < faceEnd; i++)
             			attribList.Add(attribId);
             		
@@ -445,30 +484,54 @@ namespace VVVV.Collada.ColladaModel
             	ds.WriteRange(attribList.ToArray());
             	mesh.UnlockAttributeBuffer();
             }
+            
+			public override string ToString()
+			{
+				if (geo != null)
+					return geo.id;
+				return base.ToString();
+			}
         } // Mesh
         
         public class CSkinnedMesh : CMesh
         {
+        	
+        	public static byte PaletteSize = 32;
+        	
+        	public List<Dictionary<short, byte>> PaletteList { get { return paletteList; } }
+        	private List<Dictionary<short, byte>> paletteList = new List<Dictionary<short, byte>>();
         	
         	public Model Model { get { return model; } }
         	private Model model;
         	
         	public Document.Skin Skin { get { return skin; } }
         	private Document.Skin skin;
+        	private Document.Geometry geo;
+        	
+        	public int BoneCount { get { return boneCount; } }
+        	private int boneCount = 0;
         	
         	public CSkinnedMesh(Model model, Document.Geometry geo, Document.Skin skin) 
         		: base(model, geo)
         	{
-        		//if (skin.vertexWeights.count < VertexCount)
-        		//	throw new ColladaException("Weight count of skin (" + skin.vertexWeights.count + ") must be equal or greater to vertex count of geometry '" + geo.id + "' (" + VertexCount +" ).");
-        	
+        		this.geo = geo;
         		this.model = model;
         		this.skin = skin;
+        		
+        		/*
+        		foreach (Document.Input input in skin.joint.inputs)
+        		{
+        			if (input.semantic == "JOINT")
+        			{
+        				Document.Source source = (Document.Source) input.source;
+        				boneCount = ((Document.Array<string>) source.array).Count;
+        			}
+        		}
+        		*/
         	}
         	
-        	protected override List<VertexElement> getVertexDeclaration()
+        	protected override void FinalizeVertexDeclaration(List<VertexElement> vertexElements)
         	{
-        		List<VertexElement> vertexElements = base.getVertexDeclaration();
         		short offset = 0;
         		foreach (VertexElement ve in vertexElements)
         		{
@@ -501,14 +564,14 @@ namespace VVVV.Collada.ColladaModel
                                       DeclarationMethod.Default,
                                       DeclarationUsage.BlendWeight,
                                       0));
-        		
-        		return vertexElements;
+    			
+    			vertexElements.Add(VertexElement.VertexDeclarationEnd);
         	}
         	
         	protected override void fillVertexBuffer(Mesh mesh)
             {
-        		int count = VertexArray.Length / VertexStride;
-        		byte[] blendIndices = new byte[4];
+        		short[] blendIndices = new short[4];
+        		byte[] blendIndicesVB = new byte[4];
         		float[] blendWeights = new float[4];
         		float blendWeight, blendWeightSum;
         		bool displayMaxNumInfluenceWarning = true;
@@ -520,46 +583,59 @@ namespace VVVV.Collada.ColladaModel
         				weightInput = input;
         		
             	DataStream ds = mesh.LockVertexBuffer(LockFlags.None);
-            	
-            	try {
+            	try 
+            	{
+            		// Read out all blend weights and indices to build an offset table
+            		uint[] offsets = new uint[skin.vertexWeights.count];
             		uint offset = 0;
-	            	for (int i = 0; i < count; i++)
+            		for (int i = 0; i < offsets.Length; i++)
+            		{
+            			offsets[i] = offset;
+            			offset += 2 * skin.vertexWeights.vcount[i];
+            		}
+            		
+	            	for (int vertexIndex = 0; vertexIndex < VertexCount; vertexIndex++)
 	            	{
-	            		ds.WriteRange(VertexArray, i * VertexStride, VertexStride);
+	            		ds.WriteRange(VertexArray, vertexIndex * VertexStride, VertexStride);
+	            		
+	            		int v = InvVertexMapping[vertexIndex];
+	            		offset = offsets[v];
 	            		
 	            		blendWeightSum = 0;
-	            		if (i < 100)
-	            			COLLADAUtil.Log(COLLADALogType.Debug, "\nweight count " + skin.vertexWeights.vcount[i]);
 	            		for (int j = 0; j < 4; j++)
 	            		{
-	            			if (j < skin.vertexWeights.vcount[i])
+	            			if (j < skin.vertexWeights.vcount[v])
 	            			{
-	            				// assuming that there are only 256 blend matrices
-	            				// TODO: support more than 256 blend matrices
-	            				blendIndices[j] = (byte) skin.vertexWeights.v[offset + 2 * j];
+	            				blendIndices[j] = (short) skin.vertexWeights.v[offset + 2 * j];
+	            				blendIndicesVB[j] = (byte) blendIndices[j];
 	            				blendWeight = COLLADAUtil.GetSourceElement(
 		            				model.Doc, 
 		            				weightInput, 
 		            				skin.vertexWeights.v[offset + 2 * j + 1])[0];
-	            				//blendWeights[j] = (short) (blendWeight * short.MaxValue);
 	            				blendWeights[j] = blendWeight;
 		            			blendWeightSum += blendWeight;
 	            			}
 	            			else
 	            			{
 	            				blendIndices[j] = 0;
+	            				blendIndicesVB[j] = 0;
 	            				blendWeights[j] = 0;
-	            			}
-	            			if (i < 100) {
-	            				COLLADAUtil.Log(COLLADALogType.Debug, "index: " + blendIndices[j] + ", weight: " + blendWeights[j]);
 	            			}
 	            		}
 	            		
-	            		offset += 2 * skin.vertexWeights.vcount[i];
+	            		
+	            		// Find palette or create a new one
+	            		Dictionary<short, byte> palette = FindPalette(blendIndices, blendWeights);
+            			// Reindex
+        				for (int j = 0; j < 4; j++)
+            			{
+        					if (blendWeights[j] > 0)
+		            			blendIndices[j] = palette[blendIndices[j]];
+            			}
 	            		
 	            		// There are only up to four influences allowed.
 	            		// TODO: Renormalize if there are more. For now show a warning.
-	        			if (displayMaxNumInfluenceWarning && skin.vertexWeights.vcount[i] > 4)
+	        			if (displayMaxNumInfluenceWarning && skin.vertexWeights.vcount[v] > 4)
 	        			{
 	        				COLLADAUtil.Log(COLLADALogType.Warning, "There are only up to four influences allowed. Skinning might be incorrect.");
 	        				displayMaxNumInfluenceWarning = false;
@@ -574,14 +650,68 @@ namespace VVVV.Collada.ColladaModel
 	        				}
 	        			}
 	        			
-	        			ds.WriteRange(blendIndices);
+	        			ds.WriteRange(blendIndicesVB);
 	        			ds.WriteRange(blendWeights);
 	            	}
-            	} catch (Exception e){
+            	} 
+            	catch (Exception e)
+            	{
             		COLLADAUtil.Log(COLLADALogType.Error, e.Message + e.StackTrace);
             	}
-            	mesh.UnlockVertexBuffer();
+            	finally
+            	{
+            		mesh.UnlockVertexBuffer();
+            	}
+            	COLLADAUtil.Log("palette count: " + PaletteList.Count);
             }
+        	
+        	private Dictionary<short, byte> FindPalette(short[] blendIndices, float[] blendWeights)
+        	{
+        		Dictionary<short, byte> paletteWithRoom = null;
+        		
+        		foreach (Dictionary<short, byte> palette in PaletteList)
+        		{
+        			bool result = true;
+        			byte missingIndices = 0;
+        			for (int i = 0; i < blendIndices.Length; i++)
+        			{
+        				if (blendWeights[i] > 0)
+        				{
+        					bool found = palette.ContainsKey(blendIndices[i]);
+        					if (!found)
+        						missingIndices++;
+        					result = result && found;
+        				}
+        			}
+        			
+        			if (result)
+        				return palette;
+        			else
+        			{
+        				// This palette didn't match, but it could hold enough
+        				// room for later storage.
+        				if (paletteWithRoom == null && PaletteSize - palette.Count > missingIndices)
+        					paletteWithRoom = palette;
+        			}
+        		}
+        		
+        		// We didn't find a matching palette.
+        		if (paletteWithRoom == null)
+        		{
+        			paletteWithRoom = new Dictionary<short, byte>();
+        			PaletteList.Add(paletteWithRoom);
+        		}
+        		
+        		// Now add the missing indices and return it
+        		byte offset = (byte) paletteWithRoom.Count;
+        		for (int j = 0; j < 4; j++)
+				{
+        			if (blendWeights[j] > 0 && !paletteWithRoom.ContainsKey(blendIndices[j]))
+						paletteWithRoom.Add(blendIndices[j], offset++);
+				}
+        		
+        		return paletteWithRoom;
+        	}
         }
 
         // Summary:
@@ -618,8 +748,8 @@ namespace VVVV.Collada.ColladaModel
             //
             // Returns:
             //     The parent of this bone.
-            public Model.Bone Parent { get { return parent; } }
-            private Model.Bone parent;
+            public Bone Parent { get { return parent; } }
+            private Bone parent;
             //
             // Summary:
             //     Gets the matrix used to transform this bone.
@@ -666,6 +796,13 @@ namespace VVVV.Collada.ColladaModel
                 this.children = new List<Bone>();
                 name = _name;
                 parent = _parent;
+            }
+            
+            public Matrix AbsoluteTransformMatrixRoot(Bone rootBone) {
+        		if (Parent == null || rootBone == this)
+        			return TransformMatrix;
+        		
+        		return TransformMatrix * Parent.AbsoluteTransformMatrix;
             }
 
         } // ModelBone
@@ -811,7 +948,7 @@ namespace VVVV.Collada.ColladaModel
 						throw new ColladaException("can't find source with id " + channel.source.id + " of <channel>");
 					
 					Bone bone;
-					string targetNodeId = COLLADAUtil.getTargetNodeId(doc, channel);
+					string targetNodeId = COLLADAUtil.getTargetNodeId(doc, channel.target);
 					if (!model.BonesTable.TryGetValue(targetNodeId, out bone))
 						throw new ColladaException("can't find target node in <channel>");
 					
@@ -1282,43 +1419,83 @@ namespace VVVV.Collada.ColladaModel
         public class SkinnedInstanceMesh : InstanceMesh
         {
         
-        	private Model.Bone skeletonRootBone;
+        	private Document.Node skeletonRootNode;
+        	private Bone skeletonRootBone;
         	private CSkinnedMesh skinnedMesh;
         	private List<Bone> bones;
         	private List<Matrix> invBindMatrixList;
         	private Matrix bindShapeMatrix;
         	
-        	public SkinnedInstanceMesh(CSkinnedMesh mesh, Bone parentBone, Dictionary<string, string> materialBinding, Bone skeletonRootBone)
+        	public SkinnedInstanceMesh(CSkinnedMesh mesh, Bone parentBone, 
+        	                           Dictionary<string, string> materialBinding, Document.Node skeletonRootNode)
         		: base(mesh, parentBone, materialBinding)
         	{
         		this.skinnedMesh = mesh;
-        		this.skeletonRootBone = skeletonRootBone;
+        		this.skeletonRootNode = skeletonRootNode;
+        		//this.skeletonRootBone = skeletonRootBone;
         		
         		bindShapeMatrix = new Matrix();
         		bindShapeMatrix.M11 = mesh.Skin.bindShapeMatrix[0, 0];
-        		bindShapeMatrix.M12 = mesh.Skin.bindShapeMatrix[0, 1];
-        		bindShapeMatrix.M13 = mesh.Skin.bindShapeMatrix[0, 2];
-        		bindShapeMatrix.M14 = mesh.Skin.bindShapeMatrix[0, 3];
-        		bindShapeMatrix.M21 = mesh.Skin.bindShapeMatrix[1, 0];
+        		bindShapeMatrix.M12 = mesh.Skin.bindShapeMatrix[1, 0];
+        		bindShapeMatrix.M13 = mesh.Skin.bindShapeMatrix[2, 0];
+        		bindShapeMatrix.M14 = mesh.Skin.bindShapeMatrix[3, 0];
+        		bindShapeMatrix.M21 = mesh.Skin.bindShapeMatrix[0, 1];
         		bindShapeMatrix.M22 = mesh.Skin.bindShapeMatrix[1, 1];
-        		bindShapeMatrix.M23 = mesh.Skin.bindShapeMatrix[1, 2];
-        		bindShapeMatrix.M24 = mesh.Skin.bindShapeMatrix[1, 3];
-        		bindShapeMatrix.M31 = mesh.Skin.bindShapeMatrix[2, 0];
-        		bindShapeMatrix.M32 = mesh.Skin.bindShapeMatrix[2, 1];
+        		bindShapeMatrix.M23 = mesh.Skin.bindShapeMatrix[2, 1];
+        		bindShapeMatrix.M24 = mesh.Skin.bindShapeMatrix[3, 1];
+        		bindShapeMatrix.M31 = mesh.Skin.bindShapeMatrix[0, 2];
+        		bindShapeMatrix.M32 = mesh.Skin.bindShapeMatrix[1, 2];
         		bindShapeMatrix.M33 = mesh.Skin.bindShapeMatrix[2, 2];
-        		bindShapeMatrix.M34 = mesh.Skin.bindShapeMatrix[2, 3];
-        		bindShapeMatrix.M41 = mesh.Skin.bindShapeMatrix[3, 0];
-        		bindShapeMatrix.M42 = mesh.Skin.bindShapeMatrix[3, 1];
-        		bindShapeMatrix.M43 = mesh.Skin.bindShapeMatrix[3, 2];
+        		bindShapeMatrix.M34 = mesh.Skin.bindShapeMatrix[3, 2];
+        		bindShapeMatrix.M41 = mesh.Skin.bindShapeMatrix[0, 3];
+        		bindShapeMatrix.M42 = mesh.Skin.bindShapeMatrix[1, 3];
+        		bindShapeMatrix.M43 = mesh.Skin.bindShapeMatrix[2, 3];
         		bindShapeMatrix.M44 = mesh.Skin.bindShapeMatrix[3, 3];
         	}
         	
-        	public List<Matrix> GetPremultipliedBoneMatrixList() {
+        	public List<Matrix> GetSkinningMatrices() {
+        		LoadBones();
+        		
+        		List<Matrix> boneMatrixList = new List<Matrix>();
+        		for (int i = 0; i < invBindMatrixList.Count; i++)
+        		{
+        			boneMatrixList.Add(bindShapeMatrix * invBindMatrixList[i] * bones[i].AbsoluteTransformMatrix);
+					//boneMatrixList.Add(bindShapeMatrix);
+        		}
+        		
+        		return boneMatrixList;
+        	}
+        	
+        	public List<Vector3> GetSkeletonVertices()
+        	{
+        		LoadBones();
+        		
+        		List<Vector3> boneVertices = new List<Vector3>();
+        		for (int i = 0; i < bones.Count; i++)
+        		{
+        			Vector3 s, t1, t2;
+        			Quaternion q;
+        			(bones[i].AbsoluteTransformMatrix).Decompose(out s, out q, out t1);
+        			
+        			foreach (Bone b in bones[i].Children)
+        			{
+        				(b.AbsoluteTransformMatrix).Decompose(out s, out q, out t2);
+        				boneVertices.Add(t1);
+        				boneVertices.Add(t2);
+        			}
+        		}
+        		
+        		return boneVertices;
+        	}
+        	
+        	private void LoadBones() {
         		if (bones == null)
         		{
         			bones = new List<Bone>();
         			invBindMatrixList = new List<Matrix>();
         			Document.Source source;
+        			
+        			((CSkinnedMesh)Mesh).Model.BonesTable.TryGetValue(skeletonRootNode.id, out skeletonRootBone);
         			
         			Model model = skinnedMesh.Model;
         			foreach (Document.Input input in skinnedMesh.Skin.joint.inputs)
@@ -1327,11 +1504,11 @@ namespace VVVV.Collada.ColladaModel
 	        			{
 	        				case "JOINT":
 	        					source = (Document.Source) input.source;
+	        					Document.Array<string> keys = (Document.Array<string>) source.array;
 	        					switch (source.arrayType)
 	        					{
 	        						case "IDREF_array":
 	        							// target nodes are addressed absolute
-	        							Document.Array<string> keys = (Document.Array<string>) source.array;
 	        							for (int i = 0; i < keys.Count; i++)
 	        							{
 	        								bones.Add(model.BonesTable[keys[i]]);
@@ -1339,7 +1516,11 @@ namespace VVVV.Collada.ColladaModel
 	        							break;
 	        						case "Name_array":
 	        							// target nodes are relative to skeletonRootNode
-	        							throw new Exception("TODO: implement Name_array in GetPremultipliedBoneMatrixList...");
+	        							for (int i = 0; i < keys.Count; i++)
+	        							{
+	        								bones.Add(model.BonesTable[COLLADAUtil.GetNodeByName(skeletonRootNode, keys[i]).id]);
+	        							}
+	        							break;
 	       							default:
 			        					COLLADAUtil.Log(COLLADALogType.Warning, "Unkown array type '" + source.arrayType + "' in skinning controller.");
 			        					break;
@@ -1395,16 +1576,12 @@ namespace VVVV.Collada.ColladaModel
         				throw new Exception("Count of inverse bind matrices must be equal to count of joints in skinning controller!");
         			}
         		}
-        		
-        		List<Matrix> boneMatrixList = new List<Matrix>();
-        		for (int i = 0; i < invBindMatrixList.Count; i++)
-        		{
-        			//boneMatrixList.Add(bones[i].AbsoluteTransformMatrix * invBindMatrixList[i] * bindShapeMatrix);
-        			boneMatrixList.Add(bindShapeMatrix * invBindMatrixList[i] * bones[i].AbsoluteTransformMatrix);
-        		}
-        		
-        		return boneMatrixList;
         	}
+        	
+        	public override string ToString()
+			{
+				return skinnedMesh.ToString();
+			}
         	
         }
         
@@ -1454,8 +1631,6 @@ namespace VVVV.Collada.ColladaModel
         private List<InstanceMesh> instanceMeshes;
         
         // private temporaries
-        private Dictionary<string, string>  materialBinding ;
-        private Dictionary<uint, uint>  textureCoordinateBinding;
         private Dictionary<string, Dictionary<string, uint>> textureBindings;
         #endregion
         
@@ -1474,7 +1649,13 @@ namespace VVVV.Collada.ColladaModel
             // create meshes
             meshes = new Dictionary<string, CMesh>();
             foreach (Document.Geometry geo in doc.geometries)
-            	meshes[geo.id] = new CMesh(this, geo);
+            {
+            	// only load valid meshes
+            	if (geo.mesh != null && geo.mesh.primitives != null && geo.mesh.primitives.Count > 0)
+            		meshes[geo.id] = new CMesh(this, geo);
+            	else
+            		COLLADAUtil.Log(COLLADALogType.Warning, "Geometry '" + geo.id + "' seems invalid ... skipping.");
+            }
             
             // skinned meshes will be created in ReadNode method, because the only way to tell if a mesh
             // needs skinning is by reading the scene graph of collada.
@@ -1520,11 +1701,11 @@ namespace VVVV.Collada.ColladaModel
         /// <summary>
         /// <param name="node">The "<node>" element to be converted.</param>
         /// </summary>
-        private Bone ReadNode( Model.Bone parent, Document.Node node)
+        private Bone ReadNode(Bone parent, Document.Node node)
         {
         	Bone bone;
-        	if (BonesTable.TryGetValue(node.id, out bone))
-        		return bone;
+        	//if (BonesTable.TryGetValue(node.id, out bone))
+        	//	return bone;
         	
         	bone = new Bone(this, parent, node.id);
 
@@ -1534,19 +1715,19 @@ namespace VVVV.Collada.ColladaModel
                     if (instance is Document.InstanceGeometry)
                     {
                         // resolve bindings
-                        resolveMaterialBinding((Document.InstanceWithMaterialBind)instance);
+                        Dictionary<string, string> materialBinding = ResolveMaterialBinding((Document.InstanceWithMaterialBind)instance);
 
                         Document.Geometry geo = (Document.Geometry)doc.dic[instance.url.Fragment];
                         CMesh modelMesh;
-                        if (!meshes.TryGetValue(geo.id, out modelMesh))
+                        if (meshes.TryGetValue(geo.id, out modelMesh))
                         {
-                        	throw new ColladaException("mesh with id " + geo.id + " not found in internal mesh list");
-                        }
-                        InstanceMesh instanceMesh = new InstanceMesh(modelMesh,
+                        	InstanceMesh instanceMesh = new InstanceMesh(modelMesh,
 	                                                                 bone,
 	                                                                 materialBinding);
-                        instanceMeshes.Add(instanceMesh);
-
+                        	instanceMeshes.Add(instanceMesh);
+                        }
+                        else
+                        	COLLADAUtil.Log(COLLADALogType.Error, "mesh with id " + geo.id + " not found in internal mesh list");
                     }
                     else if (instance is Document.InstanceCamera)
                     {
@@ -1563,24 +1744,34 @@ namespace VVVV.Collada.ColladaModel
                         if (skinOrMorph is Document.Skin)
                         {
                         	// resolve bindings
-                            resolveMaterialBinding((Document.InstanceWithMaterialBind)instance);
+                            Dictionary<string, string> materialBinding = ResolveMaterialBinding((Document.InstanceWithMaterialBind)instance);
                         	Document.Skin skin = (Document.Skin) skinOrMorph;
                             Document.Geometry geo = ((Document.Geometry)doc.dic[skin.source.Fragment]);
                             
-                            CSkinnedMesh modelMesh;
-	                        if (!skinnedMeshes.TryGetValue(geo.id, out modelMesh))
+                            // make sure mesh is in loaded mesh list
+                            CMesh mesh;
+	                        if (meshes.TryGetValue(geo.id, out mesh))
 	                        {
-	                        	modelMesh = new CSkinnedMesh(this, geo, skin);
-	                        	skinnedMeshes.Add(geo.id, modelMesh);
+	                        	// mesh was loaded once successfully, try to look it up in the list of skinned
+		                        // meshes (skinned meshes have different vertex declarations)...
+	                            CSkinnedMesh skinnedMesh;
+		                        if (!skinnedMeshes.TryGetValue(geo.id, out skinnedMesh))
+		                        {
+		                        	// mesh wasn't found, create it once
+		                        	skinnedMesh = new CSkinnedMesh(this, geo, skin);
+		                        	skinnedMeshes.Add(geo.id, skinnedMesh);
+		                        }
+		                        
+		                        Document.Node skeletonRootNode = (Document.Node) doc.dic[instanceController.skeleton[0].Fragment];
+		                        SkinnedInstanceMesh skinnedInstanceMesh = new SkinnedInstanceMesh(
+		                                                                            skinnedMesh,
+		                                                                            bone,
+		                                                                            materialBinding,
+		                                                                            skeletonRootNode);
+	                            instanceMeshes.Add(skinnedInstanceMesh);
 	                        }
-	                        
-	                        Document.Node skeletonRootNode = (Document.Node) doc.dic[instanceController.skeleton[0].Fragment];
-	                        SkinnedInstanceMesh skinnedInstanceMesh = new SkinnedInstanceMesh(
-	                                                                            modelMesh,
-	                                                                            bone,
-	                                                                            materialBinding,
-	                                                                            ReadNode(bone, skeletonRootNode));
-                            instanceMeshes.Add(skinnedInstanceMesh);
+	                        else
+                        	COLLADAUtil.Log(COLLADALogType.Error, "mesh with id " + geo.id + " not found in internal mesh list");
                             
                         }
                         else if (skinOrMorph is Document.Morph)
@@ -1686,19 +1877,21 @@ namespace VVVV.Collada.ColladaModel
         /// <param name="instance">The "<instance_material>" element we need to resolve the binding for.</param>
         /// <param name="context"> The current context for the COLLADA Processor</param>
         /// </summary>
-        private void resolveMaterialBinding(Document.InstanceWithMaterialBind instance)
+        private Dictionary<string, string> ResolveMaterialBinding(Document.InstanceWithMaterialBind instance)
         {
-        	if (instance.bindMaterial == null) return; // TODO: log this
-        	
-            // MaterialBinding contains the material_id bind to each symbol in the <mesh>
-            materialBinding = new Dictionary<string, string>();
+        	// MaterialBinding contains the material_id bind to each symbol in the <mesh>
+            Dictionary<string, string> materialBinding = new Dictionary<string, string>();
             // TextureCoordinateBinding contains XNA mesh channel number for a given texcoord set#
-            textureCoordinateBinding = new Dictionary<uint, uint>();
+            Dictionary<uint, uint> textureCoordinateBinding = new Dictionary<uint, uint>();
+            
+        	if (instance.bindMaterial == null) return materialBinding; // TODO: log this
+            
             foreach (KeyValuePair<string, Document.InstanceMaterial> de in instance.bindMaterial.instanceMaterials)
             {
                 // material binding materialBinding[geometry_stmbol] = material
                 materialBinding[((Document.InstanceMaterial)de.Value).symbol] = de.Key;
                 if (de.Value.bindVertexInputs != null) // textureset binding 
+                {
                     foreach (Document.InstanceMaterial.BindVertexInput bindVertexInput in de.Value.bindVertexInputs)
                     {
                         if (textureBindings[(string)de.Key].ContainsKey(bindVertexInput.semantic))
@@ -1707,8 +1900,12 @@ namespace VVVV.Collada.ColladaModel
                             uint tmp2 = bindVertexInput.inputSet;
                             textureCoordinateBinding[tmp2] = tmp;
                         }
+                        else
+                			COLLADAUtil.Log(COLLADALogType.Warning, "Can't find vertex input binding '" + bindVertexInput.semantic +"' for '" + de.Key + "'.");
                     }
+                }
                 else if (((Document.InstanceMaterial)de.Value).binds != null)
+                {
                     foreach (Document.InstanceMaterial.Bind bind in ((Document.InstanceMaterial)de.Value).binds)
                     {
                 		string key = (string)de.Key;
@@ -1721,65 +1918,15 @@ namespace VVVV.Collada.ColladaModel
 		                        textureCoordinateBinding[0] = tmp;
                 			}
                 		}
+                		else
+                			COLLADAUtil.Log(COLLADALogType.Warning, "Can't find texture binding '" + key + "'.");
                     }
+                }
             }
+            
+            return materialBinding;
         }
 
-        public Model PostLoadingProcess(Device graphicsDevice)
-        {
-            foreach (Model.CMesh mesh in meshes.Values)
-            {
-                //mesh.createVertexBuffer(graphicsDevice);
-            }
-//            // create BasicEffects from BasicMaterial, and bind to the ModelMesh and ModelMeshPart
-//            Dictionary<string,Effect> effects = new Dictionary<string,Effect>();
-//            foreach (KeyValuePair<string,BasicMaterial> de in basicMaterials)
-//            {
-//                BasicMaterial material = de.Value;
-//                Effect effect = new Effect(graphicsDevice);
-//                if (material.Alpha.HasValue)
-//                    effect.Alpha = material.Alpha.Value; 
-//                if (material.DiffuseColor.HasValue)
-//                    effect.DiffuseColor = material.DiffuseColor.Value;
-//                if (material.EmissiveColor.HasValue)
-//                    effect.EmissiveColor = material.EmissiveColor.Value;
-//                if (material.SpecularColor.HasValue)
-//                    effect.SpecularColor = material.SpecularColor.Value;
-//                if (material.SpecularPower.HasValue)
-//                    effect.SpecularPower = material.SpecularPower.Value;
-//                if (material.Texture != null)
-//                {
-//                   // if (contentManager == null)
-//                    {
-//                        effect.Texture = Texture2D.FromFile(graphicsDevice, material.Texture);
-//                        effect.TextureEnabled = true;
-//                    }
-//                    /* - TODO use content mamager to load texture instead of direct access
-//                    else
-//                    {
-//                        effect.Texture = contentManager.Load<Texture2D>("Content\\planeDiffuse");
-//                        effect.TextureEnabled = true;
-//                    }
-//                     */
-//                }
-//                if (material.VertexColorEnabled.HasValue)
-//                    effect.VertexColorEnabled = material.VertexColorEnabled.Value;
-//                effects[de.Key] = effect;
-//            }
-//            foreach (Model.InstanceMesh mesh in instanceMeshes)
-//            {
-//                mesh.Effects = new List<BasicEffect>(); 
-//                mesh.PartEffects = new List<BasicEffect>();
-//                foreach (Model.ModelMeshPart part in mesh.Mesh.MeshParts)
-//                {
-//                    BasicEffect effect = effects[mesh.MaterialBinding[part.Material]]; 
-//                    mesh.PartEffects.Add(effect);
-//                    if (! mesh.Effects.Contains(effect))
-//                        mesh.Effects.Add(effect);
-//                }
-//            }
-            return this;
-        }
         /// <summary>
         /// Create a BasicMaterial from a "<material>".
         /// <param name="material">The "<material>" element to be converted.</param>
@@ -1932,9 +2079,9 @@ namespace VVVV.Collada.ColladaModel
 			int i = 0;
 			foreach (Model.InstanceMesh instanceMesh in instanceMeshes)
     		{
-				if (instanceMesh.Mesh.MeshParts != null && instanceMesh.Mesh.MeshParts.Count > 0)
+				if (instanceMesh.Mesh.Primitives.Count > 0)
 				{
-					meshes.Add(instanceMesh.Mesh.create3D9Mesh(graphicsDevice, ref attribId));
+					meshes.Add(instanceMesh.Mesh.Create3D9Mesh(graphicsDevice, ref attribId));
 					attribId++;
 					i++;
 				}
@@ -1965,7 +2112,7 @@ namespace VVVV.Collada.ColladaModel
 			
 			foreach (Model.InstanceMesh instanceMesh in instanceMeshes)
 			{
-				for (int i = 0; i < instanceMesh.Mesh.MeshParts.Count; i++)
+				for (int i = 0; i < instanceMesh.Mesh.Primitives.Count; i++)
 				{
 					geometryTransforms.Add(transforms[instanceMesh.ParentBone.Index]);
 				}

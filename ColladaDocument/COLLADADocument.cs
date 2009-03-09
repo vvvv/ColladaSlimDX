@@ -720,6 +720,7 @@ namespace VVVV.Collada.ColladaDocument
             public string semantic;
             public ISourceOrVertices source;
             public int set;
+            public Document doc;
             private Input() {}
             public Input(Document doc, XmlNode node)
             {
@@ -729,6 +730,7 @@ namespace VVVV.Collada.ColladaDocument
                 set = doc.Get<int>(node, "set", -1);  // need to keep this a int if want to use negative values for special meaning
                 Locator loc = new Locator(doc,node);
                 source = (ISourceOrVertices)doc.dic[loc.Fragment];
+                this.doc = doc;
             }
             public Input(Document doc, int _offset, string _semantic, int _set, string _source)
             {
@@ -737,6 +739,7 @@ namespace VVVV.Collada.ColladaDocument
                 set = _set;
                 source = (ISourceOrVertices)doc.dic[_source];
                 if (source == null) throw new ColladaException("Invalid source ");
+                this.doc = doc;
             }
         }
         /// <summary>

@@ -86,36 +86,51 @@ namespace VVVV.Collada
         /// <param name="doc">The COLLADA document</param>
         /// <param name="primitive"> The "<primitive>" we need the inputs from.</param>
         /// </summary>
-        static public List<Document.Input> getAllInputs(Document doc, Document.Primitive primitive)
+        static public List<Document.Input> GetAllInputs(Document.Primitive primitive)
         {
             List<Document.Input> inputs = new List<Document.Input>();
-            Document.Input vertexInput = null;
 
             // 1- get all the regular inputs
             foreach (Document.Input input in primitive.Inputs)
             {
-                if (input.semantic == "VERTEX")
-                    vertexInput = input;
-                else
-                    inputs.Add(new Document.Input(doc, input.offset, input.semantic, input.set, ((Document.Source)input.source).id));
-            }
-            // 2- get all the indirect inputs
-            if (vertexInput != null)
-                foreach (Document.Input input in ((Document.Vertices)vertexInput.source).inputs)
+                if (input.semantic == "VERTEX") 
                 {
-                    inputs.Add(new Document.Input(doc, vertexInput.offset, input.semantic, input.set, ((Document.Source)input.source).id));
+                	// 2- get all the indirect inputs
+	                foreach (Document.Input input2 in ((Document.Vertices)input.source).inputs)
+	                    inputs.Add(new Document.Input(input2.doc, input.offset, input2.semantic, input2.set, ((Document.Source)input2.source).id));
                 }
+                else
+                    inputs.Add(input);
+            }
+            
             return inputs;
         }
         
-        public static string getTargetNodeId(Document doc, Document.Channel channel)
+        /// <summary>
+        /// Helper function. Returns inputs with specified semantic for specified primitive.
+        /// Resolves the 'VERTEX' indirection case.
+        /// </summary>
+        /// <param name="primitive">The "<primitive>" we need the inputs from.</param>
+        /// <param name="semantic">The semantic the inputs should have.</param>
+        public static List<Document.Input> GetInput(Document.Primitive primitive, string semantic)
         {
-        	string targetAddress = channel.target;
+        	List<Document.Input> resultList = new List<Document.Input>();
+        	List<Document.Input> inputs = GetAllInputs(primitive);
+        	foreach (Document.Input input in inputs)
+        	{
+        		if (input.semantic == semantic)
+        			resultList.Add(input);
+        	}
+        	return resultList;
+        }
+        
+        public static string getTargetNodeId(Document doc, string targetAddress)
+        {
 			string[] addressParts = targetAddress.Split('/');
 			if (addressParts.Length == 0)
-				throw new ColladaException("invalid target address in <channel>: " + targetAddress);
+				throw new ColladaException("invalid target address: " + targetAddress);
 			if (addressParts[0] == ".")
-				throw new ColladaException("can't handle relative target address in <channel>:" + targetAddress);
+				throw new ColladaException("can't handle relative target address:" + targetAddress);
 			if (!doc.dic.ContainsKey(addressParts[0]))
 				throw new ColladaException("can't find node " + addressParts[0]);
 			
@@ -133,9 +148,28 @@ namespace VVVV.Collada
 					}
 				}
 				if (!found)
-					throw new ColladaException("invalid target address in <channel>: " + targetAddress);
+					throw new ColladaException("invalid target address: " + targetAddress);
 			}
 			return targetNode.id;
+        }
+        
+        public static Document.Node GetNodeByName(Document.Node root, string sid)
+        {
+        	if (root.sid == sid)
+        		return root;
+        	
+        	if (root.children != null)
+        	{
+	        	Document.Node node;
+	        	foreach (Document.Node child in root.children)
+	        	{
+	        		node = GetNodeByName(child, sid);
+	        		if (node != null)
+	        			return node;
+	        	}
+        	}
+        	
+        	return null;
         }
         
 		public class SimpleLogger : ICOLLADALogger
@@ -173,6 +207,11 @@ namespace VVVV.Collada
 		{
 			Log(COLLADALogType.Warning, e.Message);
 			Log(COLLADALogType.Debug, e.StackTrace);
+		}
+		
+		public static void Log(string msg)
+		{
+			Log(COLLADALogType.Debug, msg);
 		}
         
     }
