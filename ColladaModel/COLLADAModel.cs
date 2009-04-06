@@ -496,11 +496,6 @@ namespace VVVV.Collada.ColladaModel
         public class CSkinnedMesh : CMesh
         {
         	
-        	public static byte PaletteSize = 32;
-        	
-        	public List<Dictionary<short, byte>> PaletteList { get { return paletteList; } }
-        	private List<Dictionary<short, byte>> paletteList = new List<Dictionary<short, byte>>();
-        	
         	public Model Model { get { return model; } }
         	private Model model;
         	
@@ -570,9 +565,10 @@ namespace VVVV.Collada.ColladaModel
         	
         	protected override void fillVertexBuffer(Mesh mesh)
             {
-        		short[] blendIndices = new short[4];
-        		byte[] blendIndicesVB = new byte[4];
-        		float[] blendWeights = new float[4];
+        		List<KeyValuePair<byte, float>> blendData = new List<KeyValuePair<byte, float>>();
+        		byte[] blendIndices = new byte[MaxBlendIndexCount];
+        		float[] blendWeights = new float[MaxBlendIndexCount];
+        		byte blendIndex;
         		float blendWeight, blendWeightSum;
         		bool displayMaxNumInfluenceWarning = true;
         		
@@ -601,40 +597,46 @@ namespace VVVV.Collada.ColladaModel
 	            		int v = InvVertexMapping[vertexIndex];
 	            		offset = offsets[v];
 	            		
-	            		blendWeightSum = 0;
-	            		for (int j = 0; j < 4; j++)
+	            		// read in all blend indices, sort them by weight,
+	            		// select up to MaxBlendIndexCount and renormalize.
+	            		blendData.Clear();
+	            		for (int j = 0; j < skin.vertexWeights.vcount[v]; j++)
 	            		{
-	            			if (j < skin.vertexWeights.vcount[v])
+            				blendIndex = (byte) skin.vertexWeights.v[offset + 2 * j];
+            				blendWeight = COLLADAUtil.GetSourceElement(
+	            				model.Doc, 
+	            				weightInput, 
+	            				skin.vertexWeights.v[offset + 2 * j + 1])[0];
+	            			
+            				// ignore blend indices with values greater than MaxSkinningMatrixCount
+            				//if (blendIndex < MaxBlendIndexCount)
+	            				blendData.Add(new KeyValuePair<byte, float>(blendIndex, blendWeight));
+	            		}
+	            		
+	            		blendData.Sort(
+	            			delegate(KeyValuePair<byte, float> firstPair, KeyValuePair<byte, float> secondPair)
 	            			{
-	            				blendIndices[j] = (short) skin.vertexWeights.v[offset + 2 * j];
-	            				blendIndicesVB[j] = (byte) blendIndices[j];
-	            				blendWeight = COLLADAUtil.GetSourceElement(
-		            				model.Doc, 
-		            				weightInput, 
-		            				skin.vertexWeights.v[offset + 2 * j + 1])[0];
-	            				blendWeights[j] = blendWeight;
-		            			blendWeightSum += blendWeight;
+	            				return firstPair.Value.CompareTo(secondPair.Value);
+	            			});
+	            		
+	            		blendWeightSum = 0;
+	            		for (int j = 0; j < MaxBlendIndexCount; j++)
+	            		{
+	            			if (j < blendData.Count)
+	            			{
+	            				blendIndices[j] = blendData[j].Key;
+	            				blendWeights[j] = blendData[j].Value;
+	            				blendWeightSum += blendData[j].Value;
 	            			}
 	            			else
 	            			{
 	            				blendIndices[j] = 0;
-	            				blendIndicesVB[j] = 0;
 	            				blendWeights[j] = 0;
 	            			}
 	            		}
 	            		
 	            		
-	            		// Find palette or create a new one
-	            		Dictionary<short, byte> palette = FindPalette(blendIndices, blendWeights);
-            			// Reindex
-        				for (int j = 0; j < 4; j++)
-            			{
-        					if (blendWeights[j] > 0)
-		            			blendIndices[j] = palette[blendIndices[j]];
-            			}
-	            		
 	            		// There are only up to four influences allowed.
-	            		// TODO: Renormalize if there are more. For now show a warning.
 	        			if (displayMaxNumInfluenceWarning && skin.vertexWeights.vcount[v] > 4)
 	        			{
 	        				COLLADAUtil.Log(COLLADALogType.Warning, "There are only up to four influences allowed. Skinning might be incorrect.");
@@ -650,7 +652,7 @@ namespace VVVV.Collada.ColladaModel
 	        				}
 	        			}
 	        			
-	        			ds.WriteRange(blendIndicesVB);
+	        			ds.WriteRange(blendIndices);
 	        			ds.WriteRange(blendWeights);
 	            	}
             	} 
@@ -662,56 +664,7 @@ namespace VVVV.Collada.ColladaModel
             	{
             		mesh.UnlockVertexBuffer();
             	}
-            	COLLADAUtil.Log("palette count: " + PaletteList.Count);
             }
-        	
-        	private Dictionary<short, byte> FindPalette(short[] blendIndices, float[] blendWeights)
-        	{
-        		Dictionary<short, byte> paletteWithRoom = null;
-        		
-        		foreach (Dictionary<short, byte> palette in PaletteList)
-        		{
-        			bool result = true;
-        			byte missingIndices = 0;
-        			for (int i = 0; i < blendIndices.Length; i++)
-        			{
-        				if (blendWeights[i] > 0)
-        				{
-        					bool found = palette.ContainsKey(blendIndices[i]);
-        					if (!found)
-        						missingIndices++;
-        					result = result && found;
-        				}
-        			}
-        			
-        			if (result)
-        				return palette;
-        			else
-        			{
-        				// This palette didn't match, but it could hold enough
-        				// room for later storage.
-        				if (paletteWithRoom == null && PaletteSize - palette.Count > missingIndices)
-        					paletteWithRoom = palette;
-        			}
-        		}
-        		
-        		// We didn't find a matching palette.
-        		if (paletteWithRoom == null)
-        		{
-        			paletteWithRoom = new Dictionary<short, byte>();
-        			PaletteList.Add(paletteWithRoom);
-        		}
-        		
-        		// Now add the missing indices and return it
-        		byte offset = (byte) paletteWithRoom.Count;
-        		for (int j = 0; j < 4; j++)
-				{
-        			if (blendWeights[j] > 0 && !paletteWithRoom.ContainsKey(blendIndices[j]))
-						paletteWithRoom.Add(blendIndices[j], offset++);
-				}
-        		
-        		return paletteWithRoom;
-        	}
         }
 
         // Summary:
@@ -798,13 +751,6 @@ namespace VVVV.Collada.ColladaModel
                 parent = _parent;
             }
             
-            public Matrix AbsoluteTransformMatrixRoot(Bone rootBone) {
-        		if (Parent == null || rootBone == this)
-        			return TransformMatrix;
-        		
-        		return TransformMatrix * Parent.AbsoluteTransformMatrix;
-            }
-
         } // ModelBone
         
         #region transform classes
@@ -968,7 +914,7 @@ namespace VVVV.Collada.ColladaModel
 				
 				public void Apply(float time)
         		{
-					float[] val = sampler.sample(time);
+					float[] val = sampler.Sample(time);
         			transform.SetElement(targetTransformKey, val);
         		}
 			}
@@ -977,7 +923,7 @@ namespace VVVV.Collada.ColladaModel
 			{
 				public static double APPROXIMATION_EPSILON = 1.0e-09;
 				public static double VERYSMALL = 1.0e-20;
-				public static int MAXIMUM_ITERATIONS = 1000;
+				public static int MAXIMUM_ITERATIONS = 100;
 				
 				public enum EInterpolation { LINEAR, BEZIER, CARDINAL, HERMITE, BSPLINE, STEP };
 				private EInterpolation[] interpolations;
@@ -1051,14 +997,14 @@ namespace VVVV.Collada.ColladaModel
 					}
 				}
 				
-				public float[] sample(float time)
+				public float[] Sample(float time)
 				{
 					if (time <= startTime)
 						return COLLADAUtil.GetSourceElement(doc, output, 0);
 					if (time >= endTime)
 						return COLLADAUtil.GetSourceElement(doc, output, inputs.Length - 1);
 					
-					int i = findKeyFrame(time);
+					int i = FindKeyFrame(time);
 					int j = i + 1;
 					
 					float[][] outp = new float[2][];
@@ -1104,17 +1050,17 @@ namespace VVVV.Collada.ColladaModel
 								s = (time - inputs[i]) / (inputs[j] - inputs[i]);
 								for (int k = 0; k < result.Length; k++)
 								{
-									result[k] = bezierInterpolate(s, p[0][k], c[0][k], c[1][k], p[1][k]);
+									result[k] = BezierInterpolate(s, p[0][k], c[0][k], c[1][k], p[1][k]);
 								}
 								return result;
 							}
 							else if (dim_tangents == dim_output + 1)
 							{
 								result = new float[dim_output];
-								s = approximateCubicBezierParameter(time, inputs[i], tang[0][0], tang[1][0], inputs[j]);
+								s = ApproximateCubicBezierParameter(time, inputs[i], tang[0][0], tang[1][0], inputs[j]);
 								for (int k = 0; k < result.Length; k++)
 								{
-									result[k] = bezierInterpolate(s, outp[0][k], tang[0][k + 1], tang[1][k + 1], outp[1][k]);
+									result[k] = BezierInterpolate(s, outp[0][k], tang[0][k + 1], tang[1][k + 1], outp[1][k]);
 								}
 								return result;
 							}
@@ -1123,8 +1069,8 @@ namespace VVVV.Collada.ColladaModel
 								result = new float[dim_output];
 								for (int k = 0; k < dim_output; k++)
 								{
-									s = approximateCubicBezierParameter(time, inputs[i], tang[0][2 * k], tang[0][2 * k], inputs[j]);
-									result[k] = bezierInterpolate(s, outp[0][k], tang[0][2 * k + 1], tang[1][2 * k + 1], outp[1][k]);
+									s = ApproximateCubicBezierParameter(time, inputs[i], tang[0][2 * k], tang[0][2 * k], inputs[j]);
+									result[k] = BezierInterpolate(s, outp[0][k], tang[0][2 * k + 1], tang[1][2 * k + 1], outp[1][k]);
 								}
 								return result;
 							}
@@ -1141,25 +1087,25 @@ namespace VVVV.Collada.ColladaModel
 					throw new ColladaException("sampling failed!");
 				}
 				
-				private int findKeyFrame(float time)
+				private int FindKeyFrame(float time)
 				{
-					return findKeyFrame(time, 0, inputs.Length - 1);
+					return FindKeyFrame(time, 0, inputs.Length - 1);
 				}
 				
-				private int findKeyFrame(float time, int l, int h)
+				private int FindKeyFrame(float time, int l, int h)
 				{
 					if (l == h || l == h - 1)
 						return l;
 					
 					int m = l + (h - l) / 2;
 					if (time > inputs[m])
-						return findKeyFrame(time, m, h);
+						return FindKeyFrame(time, m, h);
 					else
-						return findKeyFrame(time, l, m);
+						return FindKeyFrame(time, l, m);
 				}
 				
 				//simply clamps a value between 0 .. 1
-				private float clampToZeroOne(float value) {
+				private float ClampToZeroOne(float value) {
 				   if (value < .0f)
 				      return .0f;
 				   else if (value > 1.0f)
@@ -1177,7 +1123,7 @@ namespace VVVV.Collada.ColladaModel
 				 * @param P1_x The second interpolation point of a curve segment
 				 * @return The parametric argument that is used to retrieve atX using the parametric function representation of this curve
 				 */
-				private float approximateCubicBezierParameter (
+				private float ApproximateCubicBezierParameter (
 				         float atX, float P0_X, float C0_X, float C1_X, float P1_X ) {
 				   
 				   if (atX - P0_X < VERYSMALL)
@@ -1203,7 +1149,7 @@ namespace VVVV.Collada.ColladaModel
 				      
 				      //The curve point is close enough to our wanted atX
 				      if (Math.Abs(f - atX) < APPROXIMATION_EPSILON) {
-				         return clampToZeroOne((u + v)*0.5f);
+				         return ClampToZeroOne((u + v)*0.5f);
 				      }
 				      
 				      //dichotomy
@@ -1221,11 +1167,11 @@ namespace VVVV.Collada.ColladaModel
 				      
 				      iterationStep++;
 				   }
-				   return clampToZeroOne((u + v)*0.5f);
 				   
+				   return ClampToZeroOne((u + v)*0.5f);
 				}
 				
-				private float bezierInterpolate(float s, float p0, float c0, float c1, float p1)
+				private float BezierInterpolate(float s, float p0, float c0, float c1, float p1)
 				{
 					return (float) (Math.Pow(1 - s, 3) * p0 + 3 * Math.Pow(1 - s, 2) * s * c0 + 3 * (1 - s) * Math.Pow(s, 2) * c1 + Math.Pow(s, 3) * p1);
 				}
@@ -1264,11 +1210,11 @@ namespace VVVV.Collada.ColladaModel
         		}
         	}
         	
-        	public void apply(float time)
+        	public void Apply(float time)
         	{
         		foreach (Animation anim in children)
         		{
-        			anim.apply(time);
+        			anim.Apply(time);
         		}
         		
         		foreach (Channel channel in channels)
@@ -1414,6 +1360,13 @@ namespace VVVV.Collada.ColladaModel
                 this.parentBone = parentBone;
                 this.materialBinding = materialBinding;
             }
+            
+            public override string ToString()
+			{
+            	if (mesh != null)
+					return mesh.ToString();
+            	return base.ToString();
+			}
         }
         
         public class SkinnedInstanceMesh : InstanceMesh
@@ -1453,20 +1406,25 @@ namespace VVVV.Collada.ColladaModel
         		bindShapeMatrix.M44 = mesh.Skin.bindShapeMatrix[3, 3];
         	}
         	
-        	public List<Matrix> GetSkinningMatrices() {
+        	public List<Matrix> GetSkinningMatrices(float time) {
         		LoadBones();
         		
         		List<Matrix> boneMatrixList = new List<Matrix>();
-        		for (int i = 0; i < invBindMatrixList.Count; i++)
+        		for (int i = 0; i < invBindMatrixList.Count && i < MaxSkinningMatrixCount; i++)
         		{
+        			foreach (Transform t in bones[i].Transforms.Values)
+        				t.ApplyAnimations(time);
+        			
         			boneMatrixList.Add(bindShapeMatrix * invBindMatrixList[i] * bones[i].AbsoluteTransformMatrix);
-					//boneMatrixList.Add(bindShapeMatrix);
         		}
+        		
+        		for (int i = boneMatrixList.Count; i< MaxSkinningMatrixCount; i++)
+        			boneMatrixList.Add(Matrix.Identity);
         		
         		return boneMatrixList;
         	}
         	
-        	public List<Vector3> GetSkeletonVertices()
+        	public List<Vector3> GetSkeletonVertices(float time)
         	{
         		LoadBones();
         		
@@ -1578,11 +1536,6 @@ namespace VVVV.Collada.ColladaModel
         		}
         	}
         	
-        	public override string ToString()
-			{
-				return skinnedMesh.ToString();
-			}
-        	
         }
         
 		#endregion
@@ -1590,6 +1543,9 @@ namespace VVVV.Collada.ColladaModel
 		#region members
 		// angle conversion
 		public const float DegToRad = 0.0174532925199432957692f;
+		
+		public const byte MaxSkinningMatrixCount = 60;
+        public const byte MaxBlendIndexCount = 4;
 
         // The COLLADA Document used to create this model.
         public Document Doc { get { return doc; } }
@@ -1667,7 +1623,7 @@ namespace VVVV.Collada.ColladaModel
             basicMaterials = new Dictionary<string, BasicMaterial>();
             textureBindings = new Dictionary<string, Dictionary<string, uint>>();
             foreach (Document.Material material in doc.materials)
-                basicMaterials[material.id] = createBasicMaterial(this, material);
+                basicMaterials[material.id] = CreateBasicMaterial(this, material);
             
             // get the model from the instanced visual scene
             Document.VisualScene scene = doc.dic[doc.instanceVisualScene.url.Fragment] as Document.VisualScene;
@@ -1703,11 +1659,7 @@ namespace VVVV.Collada.ColladaModel
         /// </summary>
         private Bone ReadNode(Bone parent, Document.Node node)
         {
-        	Bone bone;
-        	//if (BonesTable.TryGetValue(node.id, out bone))
-        	//	return bone;
-        	
-        	bone = new Bone(this, parent, node.id);
+        	Bone bone = new Bone(this, parent, node.id);
 
             if (node.instances != null)
                 foreach (Document.Instance instance in node.instances)
@@ -1752,7 +1704,7 @@ namespace VVVV.Collada.ColladaModel
                             CMesh mesh;
 	                        if (meshes.TryGetValue(geo.id, out mesh))
 	                        {
-	                        	// mesh was loaded once successfully, try to look it up in the list of skinned
+	                        	// mesh was loaded once successfully, try to look for it in the list of skinned
 		                        // meshes (skinned meshes have different vertex declarations)...
 	                            CSkinnedMesh skinnedMesh;
 		                        if (!skinnedMeshes.TryGetValue(geo.id, out skinnedMesh))
@@ -1771,7 +1723,7 @@ namespace VVVV.Collada.ColladaModel
 	                            instanceMeshes.Add(skinnedInstanceMesh);
 	                        }
 	                        else
-                        	COLLADAUtil.Log(COLLADALogType.Error, "mesh with id " + geo.id + " not found in internal mesh list");
+                        		COLLADAUtil.Log(COLLADALogType.Error, "mesh with id " + geo.id + " not found in internal mesh list");
                             
                         }
                         else if (skinOrMorph is Document.Morph)
@@ -1900,8 +1852,6 @@ namespace VVVV.Collada.ColladaModel
                             uint tmp2 = bindVertexInput.inputSet;
                             textureCoordinateBinding[tmp2] = tmp;
                         }
-                        else
-                			COLLADAUtil.Log(COLLADALogType.Warning, "Can't find vertex input binding '" + bindVertexInput.semantic +"' for '" + de.Key + "'.");
                     }
                 }
                 else if (((Document.InstanceMaterial)de.Value).binds != null)
@@ -1932,7 +1882,7 @@ namespace VVVV.Collada.ColladaModel
         /// <param name="material">The "<material>" element to be converted.</param>
         /// <param name="context"> The current context for the COLLADA Processor</param>
         /// </summary>
-        public BasicMaterial createBasicMaterial(Model model, Document.Material material)
+        public BasicMaterial CreateBasicMaterial(Model model, Document.Material material)
         {
             Document doc = model.Doc;
             uint textureChannel = 0;
@@ -1993,6 +1943,7 @@ namespace VVVV.Collada.ColladaModel
             if (shader.ambient is Document.Texture)
             {
                 // Basic Material does not accept texture on ambient channel
+                COLLADAUtil.Log("Ambient channel not supported in BasicMaterial.");
                 /*
                 string sampler = ((Document.Texture)shader.ambient).texture;
                 string surface = ((Document.Sampler2D)profile.newParams[sampler].param).source;
@@ -2008,10 +1959,12 @@ namespace VVVV.Collada.ColladaModel
             else if (shader.ambient is Document.Color)
             {
                 // XNA BasicMaterial has no ambient 
+                COLLADAUtil.Log("Ambient channel not supported in BasicMaterial.");
             }
             if (shader.emission is Document.Texture)
             {
                 // XNA BasicMaterial does not accept texture for emmision
+                COLLADAUtil.Log("BasicMaterial does not accept texture for emmision.");
                 /*
                 string sampler = ((Document.Texture)shader.emission).texture;
                 string surface = ((Document.Sampler2D)profile.newParams[sampler].param).source;
@@ -2031,6 +1984,7 @@ namespace VVVV.Collada.ColladaModel
             if (shader.specular is Document.Texture)
             {
                 // XNA BasicMaterial does not accept texture for specular
+                COLLADAUtil.Log("BasicMaterial does not accept texture for specular.");
                 /*
                 string sampler = ((Document.Texture)shader.specular).texture;
                 string surface = ((Document.Sampler2D)profile.newParams[sampler].param).source;
@@ -2052,6 +2006,7 @@ namespace VVVV.Collada.ColladaModel
             if (shader.transparency is Document.Texture)
             {
                 // XNA Basic Shader does not accept a texture for the transparency channel
+                COLLADAUtil.Log("BasicMaterial does not accept texture for transparency channel.");
                 /*
                 string sampler = ((Document.Texture)shader.transparency).texture;
                 string surface = ((Document.Sampler2D)profile.newParams[sampler].param).source;
@@ -2071,7 +2026,7 @@ namespace VVVV.Collada.ColladaModel
             return materialContent;
         }
         
-    	public Mesh createUnion3D9Mesh(Device graphicsDevice, List<InstanceMesh> instanceMeshes, bool applyTranforms)
+    	public Mesh CreateUnion3D9Mesh(Device graphicsDevice, List<InstanceMesh> instanceMeshes, bool applyTranforms)
        	{
     		List<Mesh> meshes = new List<Mesh>();
     		
@@ -2090,7 +2045,7 @@ namespace VVVV.Collada.ColladaModel
 			Mesh mesh;
 			if (applyTranforms)
 			{
-				List<Matrix> geometryTransforms = getTransformsOfUnionMesh(instanceMeshes);
+				List<Matrix> geometryTransforms = GetTransformsOfUnionMesh(instanceMeshes);
 				mesh = Mesh.Concatenate(graphicsDevice, meshes.ToArray(), MeshFlags.Use32Bit | MeshFlags.Managed, geometryTransforms.ToArray(), null, null);
 			}
 			else
@@ -2104,7 +2059,7 @@ namespace VVVV.Collada.ColladaModel
         	return mesh;
         }
     	
-    	public List<Matrix> getTransformsOfUnionMesh(List<InstanceMesh> instanceMeshes)
+    	public List<Matrix> GetTransformsOfUnionMesh(List<InstanceMesh> instanceMeshes)
     	{
     		List<Matrix> geometryTransforms = new List<Matrix>();
     		Matrix[] transforms = new Matrix[this.Bones.Count];
@@ -2121,11 +2076,11 @@ namespace VVVV.Collada.ColladaModel
 			return geometryTransforms;
     	}
     	
-    	public void applyAnimations(float time)
+    	public void ApplyAnimations(float time)
     	{
     		foreach (Animation animation in AnimationsBinding.Values)
     		{
-    			animation.apply(time);
+    			animation.Apply(time);
     		}
     	}
     	
