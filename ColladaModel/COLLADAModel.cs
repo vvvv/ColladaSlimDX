@@ -1385,7 +1385,6 @@ namespace VVVV.Collada.ColladaModel
         	{
         		this.skinnedMesh = mesh;
         		this.skeletonRootNode = skeletonRootNode;
-        		//this.skeletonRootBone = skeletonRootBone;
         		
         		bindShapeMatrix = new Matrix();
         		bindShapeMatrix.M11 = mesh.Skin.bindShapeMatrix[0, 0];
@@ -1406,25 +1405,20 @@ namespace VVVV.Collada.ColladaModel
         		bindShapeMatrix.M44 = mesh.Skin.bindShapeMatrix[3, 3];
         	}
         	
-        	public List<Matrix> GetSkinningMatrices(float time) {
+        	public List<Matrix> GetSkinningMatrices() {
         		LoadBones();
         		
         		List<Matrix> boneMatrixList = new List<Matrix>();
         		for (int i = 0; i < invBindMatrixList.Count && i < MaxSkinningMatrixCount; i++)
-        		{
-        			foreach (Transform t in bones[i].Transforms.Values)
-        				t.ApplyAnimations(time);
-        			
         			boneMatrixList.Add(bindShapeMatrix * invBindMatrixList[i] * bones[i].AbsoluteTransformMatrix);
-        		}
         		
-        		for (int i = boneMatrixList.Count; i< MaxSkinningMatrixCount; i++)
+        		for (int i = boneMatrixList.Count; i < MaxSkinningMatrixCount; i++)
         			boneMatrixList.Add(Matrix.Identity);
         		
         		return boneMatrixList;
         	}
         	
-        	public List<Vector3> GetSkeletonVertices(float time)
+        	public List<Vector3> GetSkeletonVertices()
         	{
         		LoadBones();
         		
@@ -1433,6 +1427,7 @@ namespace VVVV.Collada.ColladaModel
         		{
         			Vector3 s, t1, t2;
         			Quaternion q;
+        			
         			(bones[i].AbsoluteTransformMatrix).Decompose(out s, out q, out t1);
         			
         			foreach (Bone b in bones[i].Children)
@@ -1444,6 +1439,17 @@ namespace VVVV.Collada.ColladaModel
         		}
         		
         		return boneVertices;
+        	}
+        	
+        	public void ApplyAnimations(float time)
+        	{
+        		LoadBones();
+        		
+        		foreach (Bone b in bones)
+        		{
+        			foreach (Transform t in b.Transforms.Values)
+        				t.ApplyAnimations(time);
+        		}
         	}
         	
         	private void LoadBones() {
