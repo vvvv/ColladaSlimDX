@@ -774,7 +774,18 @@ namespace VVVV.Collada.ColladaModel
         	
         	public Matrix Matrix { get { return matrix; } }
         	public virtual void SetElement(string key, float[] val) {
-        		throw new Exception("method not implemented yet! if you get this exception then a specialized implementation of class Transform, which can handle the setElement method properly, is missing.");
+        		if (val.Length == 16)
+        		{
+        			for (int row = 0; row < 4; row++)
+        			{
+        				for (int col = 0; col < 4; col++)
+        				{
+        					matrix[row, col] = val[row + 4 * col];
+        				}
+        			}
+        		}
+        		else
+        			throw new Exception("Can't handle val array of length " + val.Length + " in SetElement of Tranform.");
         	}
         	
         	public void AddChannel(Animation.Channel channel)
@@ -973,11 +984,11 @@ namespace VVVV.Collada.ColladaModel
 								break;
 							case "OUTPUT":
 								output = input;
-								dim_output = ((Document.Source) output.source).accessor.ParameterCount;
+								dim_output = ((Document.Source) output.source).accessor.stride;
 								break;
 							case "IN_TANGENT":
 								inTangents = input;
-								dim_tangents = ((Document.Source) inTangents.source).accessor.ParameterCount;
+								dim_tangents = ((Document.Source) inTangents.source).accessor.stride;
 								break;
 							case "OUT_TANGENT":
 								outTangents = input;
@@ -1029,6 +1040,7 @@ namespace VVVV.Collada.ColladaModel
 							tang[1] = COLLADAUtil.GetSourceElement(doc, inTangents, j);
 							if (dim_output == dim_tangents)
 							{
+								/*
 								float[][] p = new float[2][];
 								float[][] c = new float[2][];
 								result = new float[dim_output];
@@ -1042,15 +1054,24 @@ namespace VVVV.Collada.ColladaModel
 									c[k][0] = (k + 1) * inputs[i] / 3 + (2 - k) * inputs[j] / 3;
 									for (int l = 1; l < p.Length; l++)
 									{
-										p[k][l] = outp[i + k][l - 1];
-										c[k][l] = tang[i + k][l - 1];
+										p[k][l] = outp[k][l - 1];
+										c[k][l] = tang[k][l - 1];
 									}
 								}
 								
 								s = (time - inputs[i]) / (inputs[j] - inputs[i]);
 								for (int k = 0; k < result.Length; k++)
 								{
-									result[k] = BezierInterpolate(s, p[0][k], c[0][k], c[1][k], p[1][k]);
+									result[k] = BezierInterpolate(s, p[0][k+1], c[0][k+1], c[1][k+1], p[1][k+1]);
+								}
+								return result;
+								*/
+								result = new float[dim_output];
+								s = ApproximateCubicBezierParameter(time, inputs[i], inputs[i] / 3.0f + inputs[j] * 2.0f / 3.0f, inputs[i] * 2.0f / 3.0f + inputs[j] / 3.0f, inputs[j]);
+								float s1 = (time - inputs[i]) / (inputs[j] - inputs[i]);
+								for (int k = 0; k < result.Length; k++)
+								{
+									result[k] = BezierInterpolate(s, outp[0][k], tang[0][k] / 3 + outp[0][k], outp[1][k] - tang[1][k] / 3, outp[1][k]);
 								}
 								return result;
 							}
@@ -1445,6 +1466,16 @@ namespace VVVV.Collada.ColladaModel
         	{
         		LoadBones();
         		
+        		// Make sure the animation is applied to the parents
+        		// of this skeleton
+        		Bone parent = skeletonRootBone.Parent;
+        		while (parent != null)
+        		{
+        			foreach (Transform t in parent.Transforms.Values)
+        				t.ApplyAnimations(time);
+        			parent = parent.Parent;
+        		}
+        		
         		foreach (Bone b in bones)
         		{
         			foreach (Transform t in b.Transforms.Values)
@@ -1482,7 +1513,8 @@ namespace VVVV.Collada.ColladaModel
 	        							// target nodes are relative to skeletonRootNode
 	        							for (int i = 0; i < keys.Count; i++)
 	        							{
-	        								bones.Add(model.BonesTable[COLLADAUtil.GetNodeByName(skeletonRootNode, keys[i]).id]);
+	        								Document.Node node = COLLADAUtil.GetNodeByName(skeletonRootNode, keys[i]);
+	        								bones.Add(model.BonesTable[node.id]);
 	        							}
 	        							break;
 	       							default:
@@ -1719,8 +1751,9 @@ namespace VVVV.Collada.ColladaModel
 		                        	skinnedMesh = new CSkinnedMesh(this, geo, skin);
 		                        	skinnedMeshes.Add(geo.id, skinnedMesh);
 		                        }
-		                        
-		                        Document.Node skeletonRootNode = (Document.Node) doc.dic[instanceController.skeleton[0].Fragment];
+
+		                        string frag = instanceController.Skeleton[0].Fragment;
+		                        Document.Node skeletonRootNode = (Document.Node) doc.dic[frag];
 		                        SkinnedInstanceMesh skinnedInstanceMesh = new SkinnedInstanceMesh(
 		                                                                            skinnedMesh,
 		                                                                            bone,

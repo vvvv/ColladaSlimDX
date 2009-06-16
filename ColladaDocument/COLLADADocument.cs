@@ -115,7 +115,7 @@ namespace VVVV.Collada.ColladaDocument
                 p[j] = (T)System.Convert.ChangeType(stringValues[i], typeof(T), encoding);
             return p;
         }
-
+        
         [Serializable()]
         /// <summary>
         /// Represents the COLLADA "<asset>" element.
@@ -300,15 +300,14 @@ namespace VVVV.Collada.ColladaDocument
                 count = doc.Get<int>(arrayElement, "count", 0);
 
                 arr = new T[count];
-                string[] stringValues = arrayElement.InnerText.Split(new Char[] { ' ' });
+                string[] stringValues = arrayElement.InnerText.Split(new Char[] { ' ', '\t', '\n' });
                 int arrayCount = 0;
                 for (int i = 0; i < stringValues.Length && arrayCount < count; i++)
                 {
                     if (stringValues[i] != "")
                     {
-                    	arr[arrayCount++] = (T)System.Convert.ChangeType(stringValues[i], typeof(T), doc.encoding);
+						arr[arrayCount++] = (T)System.Convert.ChangeType(stringValues[i], typeof(T), doc.encoding);
                     }
-                    
                 }
             }
         }
@@ -611,8 +610,21 @@ namespace VVVV.Collada.ColladaDocument
 
                 foreach (Param param in parameters)
                 {
-                    if (param.name != null || param.type != null) paramIndex.Add(index); // ignore un-named parameters
-                    index ++;
+                    if (param.name != null || param.type != null) // ignore un-named parameters
+                    {
+                    	switch (param.type.ToLower())
+                    	{
+                    		case "float4x4":
+                    			// consume next 16 indices
+                    			for (int i = 0; i < 16; i++)
+                    				paramIndex.Add(index++);
+                    			break;
+                    		default:
+                    			paramIndex.Add(index);
+                    			break;
+                    	}
+                    }
+                    index++;
                 }
             }
             // ignore parameters without a name
@@ -1365,7 +1377,7 @@ namespace VVVV.Collada.ColladaDocument
                             primitives.Add(new Line(doc, child));
                             break;
                         default:
-                            throw new ColladaException(child.Name+" type not suported yet");
+                            throw new ColladaException(child.Name+" type not supported yet");
                     }
                 }
 
@@ -1504,11 +1516,34 @@ namespace VVVV.Collada.ColladaDocument
         [Serializable()]
         public class InstanceController : InstanceWithMaterialBind
         {
-            public List<Locator> skeleton;
+        	private Document doc;
+        	private bool searchCompleted = false;
+            private List<Locator> skeleton;
+            public List<Locator> Skeleton
+            {
+            	get
+            	{
+            		if (skeleton == null && !searchCompleted)
+            		{
+            			// No skeleton given. A behaviour seen in 3dmax.
+                		// Try to find a skeleton...
+                		searchCompleted = true;
+                		
+                		Node rootJoint = FindFirstRootJoint(doc);
+	                	if (rootJoint != null)
+	                	{
+	                		skeleton = new List<Locator>();
+	                		skeleton.Add(new Locator(doc, "#" + rootJoint.id));
+	                	}
+            		}
+            		return skeleton;
+            	}
+            }
 
             public InstanceController(Document doc, XmlNode node)
                 : base(doc, node)
             {
+            	this.doc = doc;
 
                 foreach (XmlNode child in node.ChildNodes)
                 {
@@ -1529,7 +1564,21 @@ namespace VVVV.Collada.ColladaDocument
 
                     }
                 }
-            } 
+            }
+            
+            protected Node FindFirstRootJoint(Document doc)
+	        {
+            	foreach (VisualScene vs in doc.visualScenes)
+            	{
+		        	foreach (Node n in vs.nodes)
+		        	{
+		    			if (n.type.ToLower() == "joint")
+		    				return n;
+		        	}
+            	}
+	        	
+	        	return null;
+	        }
         };
         /// <summary>
         /// Represents the COLLADA "<instance_material>" element.
@@ -1714,7 +1763,7 @@ namespace VVVV.Collada.ColladaDocument
                 : base(doc, root)
             {
 
-                sid = doc.Get<string>(root, "sid", null);
+                sid = doc.Get<string>(root, "sid", id);
                 type = doc.Get<string>(root, "type", "NODE");
                 layer = doc.Get<string>(root, "layer", null);
 

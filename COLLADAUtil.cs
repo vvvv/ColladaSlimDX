@@ -57,7 +57,7 @@ namespace VVVV.Collada
             if (array is Document.Array<float>)
             {
                 Document.Array<float> farray = (Document.Array<float>)(array);
-                float[] returnValue = new float[src.accessor.ParameterCount];
+                float[] returnValue = new float[src.accessor.stride];
                 for (int i = 0; i < returnValue.Length; i++)
                 	returnValue[i] = farray[src.accessor[i, index]];
                 return returnValue;
