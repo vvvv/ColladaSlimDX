@@ -67,6 +67,21 @@ namespace ColladaSlimDX.Utils
 		}
 		
 		/// <summary>
+		/// The vector in the outward direction of the coordinate system.
+		/// </summary>
+		public Vector3 Inward
+		{
+			get
+			{
+				float lr = 1f;
+				if (type == CoordinateSystemType.RightHanded)
+					lr = -1f;
+				
+				return Vector3.Cross(right, up) * lr;
+			}
+		}
+		
+		/// <summary>
 		/// How many real-world meters in one
 		/// distance unit as a floating-point number. For
 		/// example, 1.0 for the name "meter"; 1000 for the
@@ -154,20 +169,16 @@ namespace ColladaSlimDX.Utils
 		
 		private void UpdateMatrix()
 		{
-			float lr = 1f;
-			if (type == CoordinateSystemType.RightHanded)
-				lr = -1f;
-			
-			Vector3 outward = Vector3.Cross(right, up) * lr;
+			Vector3 inward = Inward;
 			matrix[0, 0] = right.X / meter;
 			matrix[1, 0] = right.Y / meter;
 			matrix[2, 0] = right.Z / meter;
 			matrix[0, 1] = up.X / meter;
 			matrix[1, 1] = up.Y / meter;
 			matrix[2, 1] = up.Z / meter;
-			matrix[0, 2] = outward.X / meter;
-			matrix[1, 2] = outward.Y / meter;
-			matrix[2, 2] = outward.Z / meter;
+			matrix[0, 2] = inward.X / meter;
+			matrix[1, 2] = inward.Y / meter;
+			matrix[2, 2] = inward.Z / meter;
 		}
 				
 		private static DNMatrix MatrixToDNMatrix(Matrix m)
