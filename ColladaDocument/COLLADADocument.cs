@@ -20,11 +20,12 @@ using System.Collections;
 using System.Collections.Generic;   // List
 
 using System.Text.RegularExpressions; // Regex
-
+using SlimDX;
+using ColladaSlimDX.Utils;
 #endregion
 
 
-namespace VVVV.Collada.ColladaDocument
+namespace ColladaSlimDX.ColladaDocument
 {
     // Summary:
     //     Represents a COLLADA document
@@ -44,6 +45,15 @@ namespace VVVV.Collada.ColladaDocument
         public Hashtable dic;
         [NonSerialized()]
         protected CultureInfo encoding;
+        
+        protected CoordinateSystem coordinateSystem;
+        public CoordinateSystem CoordinateSystem
+        {
+        	get
+        	{
+        		return coordinateSystem;
+        	}
+        }
 
         // Helper functions
 
@@ -2236,6 +2246,7 @@ namespace VVVV.Collada.ColladaDocument
         public List<Node> nodes;
         public List<VisualScene> visualScenes;
         public List<Animation> animations;
+        public Asset asset;
         public InstanceScene instanceVisualScene;
         public InstanceScene instancePhysicsScene;
 
@@ -2274,10 +2285,25 @@ namespace VVVV.Collada.ColladaDocument
             encoding = new System.Globalization.CultureInfo(culture);
 
             // TODO: xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
-            // TODO: read axis and unit from <asset>
+            XmlNode assetElement = root.SelectSingleNode("colladans:asset", nsmgr);
+            coordinateSystem = new CoordinateSystem(CoordinateSystemType.RightHanded);
+            if (assetElement != null)
+            {
+                asset = new Asset(this, assetElement);
+            	coordinateSystem.Up = ParseUpAxis(asset);
+            	
+            	Vector3 right = new Vector3();
+            	if (coordinateSystem.Up.X == 1f)
+            		right.Y = -1f;
+            	else
+            		right.X = 1f;
+            	
+            	coordinateSystem.Right = right;
+            	
+            	coordinateSystem.Meter = asset.meter;
+            }
 
             // parse document for all libraries
-
             XmlNodeList imagesLibs = root.SelectNodes("colladans:library_images", nsmgr);
             
             foreach (XmlNode imagesLib in imagesLibs)
@@ -2381,7 +2407,7 @@ namespace VVVV.Collada.ColladaDocument
             }
 
             XmlNodeList nodeLibs = root.SelectNodes("colladans:library_nodes", nsmgr);
-
+            
             foreach (XmlNode nodeLib in nodeLibs)
             {
                 XmlNodeList nodeElements = nodeLib.SelectNodes("colladans:node", nsmgr);
@@ -2465,7 +2491,20 @@ namespace VVVV.Collada.ColladaDocument
             // release Xml document now that we have COLLADA in memmory
             root = null;
             colladaDocument = null;
-        } 
+        }
+        
+        private Vector3 ParseUpAxis(Document.Asset asset)
+        {
+        	switch (asset.up_axis.ToUpper())
+        	{
+        		case "X_UP":
+        			return new Vector3(1f, 0f, 0f);
+        		case "Z_UP":
+        			return new Vector3(0f, 0f, 1f);
+        		default:
+        			return new Vector3(0f, 1f, 0f);
+        	}
+        }
     }
  }
 

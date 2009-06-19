@@ -18,7 +18,8 @@ using System.Text;
 
 using SlimDX;
 using SlimDX.Direct3D9;
-using VVVV.Collada.ColladaDocument;
+using ColladaSlimDX.ColladaDocument;
+using ColladaSlimDX.Utils;
 //using Microsoft.Xna.Framework; // Vector3
 //using Microsoft.Xna.Framework.Graphics;
 //using Microsoft.Xna.Framework.Content; // ContentManager
@@ -27,7 +28,7 @@ using VVVV.Collada.ColladaDocument;
 
 #endregion
 
-namespace VVVV.Collada.ColladaModel
+namespace ColladaSlimDX.ColladaModel
 {
  
     [Serializable()]
@@ -419,9 +420,9 @@ namespace VVVV.Collada.ColladaModel
                 	indexArray[i + 2] = swap;
                 }
                 
-                // Reverse texture 'T' coordinate for DirectX
                 foreach (VertexElement vertexElement in VertexElements)
                 {
+                	// Reverse texture 'T' coordinate for DirectX
                     if (vertexElement.Usage == DeclarationUsage.TextureCoordinate)
                     {
                         for (int i = 0; i < vertexCount; i++)
@@ -1550,6 +1551,7 @@ namespace VVVV.Collada.ColladaModel
 	        										m.M24 = arr[i + 13];
 	        										m.M34 = arr[i + 14];
 	        										m.M44 = arr[i + 15];
+	 
 	        										invBindMatrixList.Add(m);
 	        									}
 	        									break;
@@ -1584,6 +1586,32 @@ namespace VVVV.Collada.ColladaModel
 		
 		public const byte MaxSkinningMatrixCount = 60;
         public const byte MaxBlendIndexCount = 4;
+        
+        private CoordinateSystem coordinateSystemSource;
+        public CoordinateSystem CoordinateSystemSource
+        {
+        	get
+        	{
+        		return coordinateSystemSource;
+        	}
+        	set
+        	{
+        		coordinateSystemSource = value;
+        	}
+        }
+        
+        private CoordinateSystem coordinateSystemTarget;
+        public CoordinateSystem CoordinateSystemTarget
+        {
+        	get
+        	{
+        		return coordinateSystemTarget;
+        	}
+        	set
+        	{
+        		coordinateSystemTarget = value;
+        	}
+        }
 
         // The COLLADA Document used to create this model.
         public Document Doc { get { return doc; } }
@@ -1624,6 +1652,15 @@ namespace VVVV.Collada.ColladaModel
         public List<InstanceMesh> InstanceMeshes { get { return instanceMeshes; } }
         private List<InstanceMesh> instanceMeshes;
         
+        public Matrix ConversionMatrix 
+        {
+        	get 
+        	{ 
+        		return CoordinateSystem.ConversionMatrix(
+        		CoordinateSystemSource, CoordinateSystemTarget);
+        	} 
+        }
+        
         // private temporaries
         private Dictionary<string, Dictionary<string, uint>> textureBindings;
         #endregion
@@ -1639,6 +1676,11 @@ namespace VVVV.Collada.ColladaModel
         {
             // internals
             doc = _doc;
+            
+            // create coordinate systems
+            coordinateSystemSource = doc.CoordinateSystem;
+            coordinateSystemTarget = new CoordinateSystem(
+            		CoordinateSystemType.LeftHanded);
             
             // create meshes
             meshes = new Dictionary<string, CMesh>();
@@ -1692,6 +1734,7 @@ namespace VVVV.Collada.ColladaModel
         #endregion
 
         #region methods
+        
         /// <summary>
         /// <param name="node">The "<node>" element to be converted.</param>
         /// </summary>
@@ -2065,56 +2108,6 @@ namespace VVVV.Collada.ColladaModel
             return materialContent;
         }
         
-    	public Mesh CreateUnion3D9Mesh(Device graphicsDevice, List<InstanceMesh> instanceMeshes, bool applyTranforms)
-       	{
-    		List<Mesh> meshes = new List<Mesh>();
-    		
-			int attribId = 0;
-			int i = 0;
-			foreach (Model.InstanceMesh instanceMesh in instanceMeshes)
-    		{
-				if (instanceMesh.Mesh.Primitives.Count > 0)
-				{
-					meshes.Add(instanceMesh.Mesh.Create3D9Mesh(graphicsDevice, ref attribId));
-					attribId++;
-					i++;
-				}
-    		}
-        	
-			Mesh mesh;
-			if (applyTranforms)
-			{
-				List<Matrix> geometryTransforms = GetTransformsOfUnionMesh(instanceMeshes);
-				mesh = Mesh.Concatenate(graphicsDevice, meshes.ToArray(), MeshFlags.Use32Bit | MeshFlags.Managed, geometryTransforms.ToArray(), null, null);
-			}
-			else
-				mesh = Mesh.Concatenate(graphicsDevice, meshes.ToArray(), MeshFlags.Use32Bit | MeshFlags.Managed);
-			
-			foreach (Mesh m in meshes)
-				m.Dispose();
-			
-        	mesh.OptimizeInPlace(MeshOptimizeFlags.AttributeSort);
-
-        	return mesh;
-        }
-    	
-    	public List<Matrix> GetTransformsOfUnionMesh(List<InstanceMesh> instanceMeshes)
-    	{
-    		List<Matrix> geometryTransforms = new List<Matrix>();
-    		Matrix[] transforms = new Matrix[this.Bones.Count];
-			CopyAbsoluteBoneTransformsTo(transforms);
-			
-			foreach (Model.InstanceMesh instanceMesh in instanceMeshes)
-			{
-				for (int i = 0; i < instanceMesh.Mesh.Primitives.Count; i++)
-				{
-					geometryTransforms.Add(transforms[instanceMesh.ParentBone.Index]);
-				}
-			}
-			
-			return geometryTransforms;
-    	}
-    	
     	public void ApplyAnimations(float time)
     	{
     		foreach (Animation animation in AnimationsBinding.Values)
@@ -2148,16 +2141,20 @@ namespace VVVV.Collada.ColladaModel
         
         public Matrix GetAbsoluteTransformMatrix(Bone bone, float time)
         {
+        	return _GetAbsoluteTransformMatrix(bone, time) * ConversionMatrix;
+        }
+        
+        private Matrix _GetAbsoluteTransformMatrix(Bone bone, float time)
+        {
         	foreach (Transform t in bone.Transforms.Values)
         		t.ApplyAnimations(time);
         	
         	if (bone.Parent == null)
         		return bone.TransformMatrix;
-        	return bone.TransformMatrix * GetAbsoluteTransformMatrix(bone.Parent, time);
+        	return bone.TransformMatrix * _GetAbsoluteTransformMatrix(bone.Parent, time);
         }
         
-        
     	#endregion
-    } // Model
+    }
 
 }

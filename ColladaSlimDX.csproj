@@ -35,6 +35,9 @@
   </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.Targets" />
   <ItemGroup>
+    <Reference Include="dnAnalytics">
+      <HintPath>thirdparty\dnAnalytics\dnAnalytics.dll</HintPath>
+    </Reference>
     <Reference Include="SlimDX" />
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
@@ -45,11 +48,18 @@
     <Compile Include="ColladaDocument\COLLADADocument.cs" />
     <Compile Include="ColladaModel\COLLADAModel.cs" />
     <Compile Include="ColladaPipeline\COLLADAConditioner.cs" />
-    <Compile Include="COLLADAUtil.cs" />
+    <Compile Include="Utils\COLLADAUtil.cs" />
+    <Compile Include="Utils\CoordinateSystem.cs" />
+    <None Include="thirdparty\dnAnalytics\dnAnalytics.dll" />
+    <None Include="thirdparty\dnAnalytics\dnAnalytics.xml" />
+    <None Include="thirdparty\dnAnalytics\zlib.net.dll" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="ColladaDocument" />
     <Folder Include="ColladaModel" />
     <Folder Include="ColladaPipeline" />
+    <Folder Include="Utils" />
+    <Folder Include="thirdparty" />
+    <Folder Include="thirdparty\dnAnalytics" />
   </ItemGroup>
 </Project>
