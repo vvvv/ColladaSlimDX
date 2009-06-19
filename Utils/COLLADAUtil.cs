@@ -124,7 +124,7 @@ namespace ColladaSlimDX.Utils
         	return resultList;
         }
         
-        public static string getTargetNodeId(Document doc, string targetAddress)
+        public static string GetTargetNodeId(Document doc, string targetAddress)
         {
 			string[] addressParts = targetAddress.Split('/');
 			if (addressParts.Length == 0)
@@ -205,7 +205,7 @@ namespace ColladaSlimDX.Utils
 		
 		public static void Log(ColladaException e)
 		{
-			Log(COLLADALogType.Warning, e.Message);
+			Log(COLLADALogType.Error, e.Message);
 			Log(COLLADALogType.Debug, e.StackTrace);
 		}
 		

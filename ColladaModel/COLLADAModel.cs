@@ -906,7 +906,7 @@ namespace ColladaSlimDX.ColladaModel
 						throw new ColladaException("can't find source with id " + channel.source.id + " of <channel>");
 					
 					Bone bone;
-					string targetNodeId = COLLADAUtil.getTargetNodeId(doc, channel.target);
+					string targetNodeId = COLLADAUtil.GetTargetNodeId(doc, channel.target);
 					if (!model.BonesTable.TryGetValue(targetNodeId, out bone))
 						throw new ColladaException("can't find target node in <channel>");
 					
