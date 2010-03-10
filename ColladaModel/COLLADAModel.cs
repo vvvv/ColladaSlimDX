@@ -686,7 +686,7 @@ namespace ColladaSlimDX.ColladaModel
             //
             // Returns:
             //     The index of this bone in the Model.Bones collection.
-            public int Index { get { return index; } }
+            public int Index { get { return index; } set { index = value; } }
             private int index;
             //
             // Summary:
@@ -694,7 +694,7 @@ namespace ColladaSlimDX.ColladaModel
             //
             // Returns:
             //     The name of this bone.
-            public string Name { get { return name;} }
+            public string Name { get { return name; } set { name = value; } }
             private string name;
             //
             // Summary:
@@ -786,7 +786,7 @@ namespace ColladaSlimDX.ColladaModel
         			}
         		}
         		else
-        			throw new Exception("Can't handle val array of length " + val.Length + " in SetElement of Tranform.");
+        			throw new Exception("Can't handle val array of length " + val.Length + " in SetElement of Transform.");
         	}
         	
         	public void AddChannel(Animation.Channel channel)
