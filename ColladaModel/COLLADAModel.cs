@@ -1396,8 +1396,23 @@ namespace ColladaSlimDX.ColladaModel
         
         	private Document.Node skeletonRootNode;
         	private Bone skeletonRootBone;
+        	public Bone SkeletonRootBone
+        	{
+        		get
+        		{
+        			return skeletonRootBone;
+        		}
+        	}
         	private CSkinnedMesh skinnedMesh;
         	private List<Bone> bones;
+        	public List<Bone> Bones
+        	{
+        		get
+        		{
+        			LoadBones();
+        			return bones;
+        		}
+        	}
         	private List<Matrix> invBindMatrixList;
         	private Matrix bindShapeMatrix;
         	
