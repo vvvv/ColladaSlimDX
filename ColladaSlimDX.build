@@ -5,12 +5,26 @@
 	xmlns="http://nant.sf.net/release/0.85/nant.xsd"
 >
 
-  <property name="root.dir" value="../.." />
-  <include buildfile="${root.dir}/nant-common.xml" />
-  <property name="lib.name" value="_Collada.dll" />
-
+  <property name="nant.settings.currentframework" value="net-2.0" />
+  <if test="${not property::exists('root.bin')}">
+    <property name="root.bin" value="bin/" />
+  </if>
+  <property name="lib.name" value="ColladaSlimDX.dll" />
+  
+  <target name="build">
+		<mkdir dir="${root.bin}" />
+		<csc target="library" output="${root.bin}/${lib.name}" debug="false" unsafe="true">
+			<sources>
+				<include name="/**/*.cs" />
+			</sources>
+			<references refid="project.references" />
+		</csc>
+  </target>
+  
   <assemblyfileset id="project.references">
+    <include name="${slimdx.dll}" />
+    <include name="thirdparty/dnAnalytics/dnAnalytics.dll" />
+    <include name="thirdparty/dnAnalytics/zlib.net.dll" />
   </assemblyfileset>
   
-
 </project>
