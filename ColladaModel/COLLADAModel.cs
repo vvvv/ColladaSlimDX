@@ -1395,6 +1395,7 @@ namespace ColladaSlimDX.ColladaModel
         {
         
         	private Document.Node skeletonRootNode;
+        	
         	private Bone skeletonRootBone;
         	public Bone SkeletonRootBone
         	{
@@ -1403,7 +1404,9 @@ namespace ColladaSlimDX.ColladaModel
         			return skeletonRootBone;
         		}
         	}
+        	
         	private CSkinnedMesh skinnedMesh;
+        	
         	private List<Bone> bones;
         	public List<Bone> Bones
         	{
@@ -1413,8 +1416,25 @@ namespace ColladaSlimDX.ColladaModel
         			return bones;
         		}
         	}
+        	
+        	public List<Matrix> InvBindMatrixList
+        	{
+        		get
+        		{
+        			LoadBones();
+        			return invBindMatrixList;
+        		}
+        	}
         	private List<Matrix> invBindMatrixList;
+        	
         	private Matrix bindShapeMatrix;
+        	public Matrix BindShapeMatrix
+        	{
+        		get
+        		{
+        			return bindShapeMatrix;
+        		}
+        	}
         	
         	public SkinnedInstanceMesh(CSkinnedMesh mesh, Bone parentBone, 
         	                           Dictionary<string, string> materialBinding, Document.Node skeletonRootNode)
@@ -1453,29 +1473,6 @@ namespace ColladaSlimDX.ColladaModel
         			boneMatrixList.Add(Matrix.Identity);
         		
         		return boneMatrixList;
-        	}
-        	
-        	public List<Vector3> GetSkeletonVertices()
-        	{
-        		LoadBones();
-        		
-        		List<Vector3> boneVertices = new List<Vector3>();
-        		for (int i = 0; i < bones.Count; i++)
-        		{
-        			Vector3 s, t1, t2;
-        			Quaternion q;
-        			
-        			(bones[i].AbsoluteTransformMatrix).Decompose(out s, out q, out t1);
-        			
-        			foreach (Bone b in bones[i].Children)
-        			{
-        				(b.AbsoluteTransformMatrix).Decompose(out s, out q, out t2);
-        				boneVertices.Add(t1);
-        				boneVertices.Add(t2);
-        			}
-        		}
-        		
-        		return boneVertices;
         	}
         	
         	public void ApplyAnimations(float time)
