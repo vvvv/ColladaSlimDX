@@ -625,9 +625,9 @@ namespace ColladaSlimDX.ColladaModel
 	            		{
 	            			if (j < blendData.Count)
 	            			{
-	            				blendIndices[j] = blendData[j].Key;
-	            				blendWeights[j] = blendData[j].Value;
-	            				blendWeightSum += blendData[j].Value;
+	            				blendIndices[j] = blendData[blendData.Count - 1 - j].Key;
+	            				blendWeights[j] = blendData[blendData.Count - 1 - j].Value;
+	            				blendWeightSum += blendData[blendData.Count - 1 - j].Value;
 	            			}
 	            			else
 	            			{
