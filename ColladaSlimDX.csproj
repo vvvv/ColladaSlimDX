@@ -41,7 +41,7 @@
       <HintPath>thirdparty\dnAnalytics\dnAnalytics.dll</HintPath>
     </Reference>
     <Reference Include="SlimDX">
-      <HintPath>..\..\plugins\_lib\SlimDX\SlimDX.dll</HintPath>
+      <HintPath>..\..\vvvv50\lib\SlimDX.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
