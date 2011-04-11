@@ -1,27 +1,37 @@
 /*
  * Copyright 2006 Sony Computer Entertainment Inc.
  * 
- * Licensed under the SCEA Shared Source License, Version 1.0 (the "License"); you may not use this 
+ * Licensed under the SCEA Shared Source License, Version 1.0 (the "License"); you may not use this
  * file except in compliance with the License. You may obtain a copy of the License at:
  * http://research.scea.com/scea_shared_source_license.html
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License 
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or 
- * implied. See the License for the specific language governing permissions and limitations under the 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ * implied. See the License for the specific language governing permissions and limitations under the
  * License.
  */
 
 #region Using Statements
 using System;
-using System.Xml;                   // XmlDocument
-using System.IO;                    // Console
-using System.Globalization;         // CultureInfo
+using System.Linq;
+using System.Xml;
+using System.IO;
+using System.Globalization;
 using System.Collections;
-using System.Collections.Generic;   // List
-
-using System.Text.RegularExpressions; // Regex
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using SlimDX;
 using ColladaSlimDX.Utils;
+
+// XmlDocument
+// Console
+// CultureInfo
+
+// List
+
+// Regex
+
+
 #endregion
 
 
@@ -49,10 +59,10 @@ namespace ColladaSlimDX.ColladaDocument
         protected CoordinateSystem coordinateSystem;
         public CoordinateSystem CoordinateSystem
         {
-        	get
-        	{
-        		return coordinateSystem;
-        	}
+            get
+            {
+                return coordinateSystem;
+            }
         }
 
         // Helper functions
@@ -85,7 +95,7 @@ namespace ColladaSlimDX.ColladaDocument
                     return new ParamRef(this, child);
                 default:
                     throw new ColladaException("un-expected node <" + child.Name + " in float_or_param_type :" + filename);
- 
+                    
             }
         }
         public ITransparent TransparentParam(XmlNode node)
@@ -233,7 +243,7 @@ namespace ColladaSlimDX.ColladaDocument
         [Serializable()]
         public class Element
         {
-        	public static Random rand = new Random();
+            public static Random rand = new Random();
             public readonly string id;
             public string name;
             public Asset asset; // note: some elements derive from element, but do *not* have an asset tag
@@ -310,13 +320,13 @@ namespace ColladaSlimDX.ColladaDocument
                 count = doc.Get<int>(arrayElement, "count", 0);
 
                 arr = new T[count];
-                string[] stringValues = arrayElement.InnerText.Split(new Char[] { ' ', '\t', '\n' });
+                string[] stringValues = arrayElement.InnerText.Split(new Char[] { ' ', '\t', '\n', '\r' });
                 int arrayCount = 0;
                 for (int i = 0; i < stringValues.Length && arrayCount < count; i++)
                 {
                     if (stringValues[i] != "")
                     {
-						arr[arrayCount++] = (T)System.Convert.ChangeType(stringValues[i], typeof(T), doc.encoding);
+                        arr[arrayCount++] = (T)System.Convert.ChangeType(stringValues[i], typeof(T), doc.encoding);
                     }
                 }
             }
@@ -363,7 +373,7 @@ namespace ColladaSlimDX.ColladaDocument
                 type = child.Name;
                 value = child.InnerXml;
             }
-        }       
+        }
         /// <summary>
         /// Represents the COLLADA "<samppler2D>" element.
         /// </summary>
@@ -456,7 +466,7 @@ namespace ColladaSlimDX.ColladaDocument
                             throw new ColladaException(child.Name + " is not supported in " + this.ToString());
                     }
                 }
-               
+                
                 
             }
         }
@@ -497,14 +507,14 @@ namespace ColladaSlimDX.ColladaDocument
         [Serializable()]
         public class FloatVector : IFxBasicTypeCommon
         {
-        	public float[] values;
+            public float[] values;
             private FloatVector() { }
             public FloatVector(Document doc, XmlNode node)
             {
-            	string[] stringValues = node.InnerText.Split(new Char[] { ' ' });
-            	values = new float[stringValues.Length];
+                string[] stringValues = node.InnerText.Split(new Char[] { ' ' });
+                values = new float[stringValues.Length];
                 for (int i = 0; i < stringValues.Length; i++)
-                	values[i] = float.Parse(stringValues[i], doc.encoding);
+                    values[i] = float.Parse(stringValues[i], doc.encoding);
             }
         }
         /// <summary>
@@ -555,16 +565,16 @@ namespace ColladaSlimDX.ColladaDocument
                             break;
                         case "float":
                             param = new FloatVector(doc, child);
-	            			break;
-	            		case "float2":
-	            			param = new FloatVector(doc, child);
-	            			break;
-	            		case "float3":
-	            			param = new FloatVector(doc, child);
-	            			break;
-	            		case "float4":
-	            			param = new FloatVector(doc, child);
-	            			break;
+                            break;
+                        case "float2":
+                            param = new FloatVector(doc, child);
+                            break;
+                        case "float3":
+                            param = new FloatVector(doc, child);
+                            break;
+                        case "float4":
+                            param = new FloatVector(doc, child);
+                            break;
                         default:
                             throw new ColladaException(child.Name + " is not supported yet in NewParam");
                     }
@@ -622,17 +632,17 @@ namespace ColladaSlimDX.ColladaDocument
                 {
                     if (param.name != null || param.type != null) // ignore un-named parameters
                     {
-                    	switch (param.type.ToLower())
-                    	{
-                    		case "float4x4":
-                    			// consume next 16 indices
-                    			for (int i = 0; i < 16; i++)
-                    				paramIndex.Add(index++);
-                    			break;
-                    		default:
-                    			paramIndex.Add(index);
-                    			break;
-                    	}
+                        switch (param.type.ToLower())
+                        {
+                            case "float4x4":
+                                // consume next 16 indices
+                                for (int i = 0; i < 16; i++)
+                                    paramIndex.Add(index++);
+                                break;
+                            default:
+                                paramIndex.Add(index);
+                                break;
+                        }
                     }
                     index++;
                 }
@@ -784,7 +794,7 @@ namespace ColladaSlimDX.ColladaDocument
             {
 
                 if (id == null) throw new ColladaException("Vertices[" + id + "] does not have id ! : " + doc.filename);
-               
+                
                 // Read inputs
                 XmlNodeList inputElements = node.SelectNodes("colladans:input", doc.nsmgr);
                 if (inputElements.Count != 0) inputs = new List<Input>();
@@ -867,8 +877,8 @@ namespace ColladaSlimDX.ColladaDocument
                 get
                 {
                     if (!isFragment) throw new ColladaException("cannot get Fragment of a non Fragment URI" + this.ToString());
-                    else return url.Fragment.Substring(1); 
-                
+                    else return url.Fragment.Substring(1);
+                    
                 }
             }
             public Uri Uri
@@ -912,11 +922,11 @@ namespace ColladaSlimDX.ColladaDocument
         }
         [Serializable()]
         public class TransparentFloat : Float, ITransparent
-        {   
+        {
             public string opaque;
             public TransparentFloat(Document doc, XmlNode node)
-                : base(doc, node) 
-            { 
+                : base(doc, node)
+            {
                 opaque = doc.Get<string>(node, "opaque", "A_ONE");
             }
         }
@@ -944,8 +954,8 @@ namespace ColladaSlimDX.ColladaDocument
         public class TransparentColor : Color, ITransparent
         {
             public string opaque;
-            public TransparentColor(Document doc, XmlNode node) : base(doc , node) 
-            { 
+            public TransparentColor(Document doc, XmlNode node) : base(doc , node)
+            {
                 opaque = doc.Get<string>(node, "opaque", "A_ONE");
             }
         }
@@ -1013,7 +1023,7 @@ namespace ColladaSlimDX.ColladaDocument
             private SimpleShader() { }
             public SimpleShader(Document doc, XmlNode node)
             {
-              
+                
                 foreach (XmlNode child in node.ChildNodes)
                 {
                     switch (child.Name)
@@ -1238,7 +1248,7 @@ namespace ColladaSlimDX.ColladaDocument
                 : base(doc, node)
             {
                 if (id == null) throw new ColladaException("Material[" + id + "] does not have id ! : " + doc.filename);
-             
+                
                 XmlNode instance_effectElement = node.SelectSingleNode("colladans:instance_effect", doc.nsmgr);
                 if (instance_effectElement == null) throw new ColladaException("Material[" + id + "] does not have <instance_effect> : " + doc.filename);
                 instanceEffect = new Locator(doc, instance_effectElement);
@@ -1249,7 +1259,7 @@ namespace ColladaSlimDX.ColladaDocument
         /// base class used to represent all the COLLADA primitives (triangles, lines, polygons...
         /// </summary>
         [Serializable()]
-        public class Primitive 
+        public class Primitive
         {
             public string name;
             public string material;
@@ -1364,9 +1374,9 @@ namespace ColladaSlimDX.ColladaDocument
             private Mesh() { }
             public Mesh(Document doc, XmlNode node)
             {
-				primitives = new List<Primitive>();
-				sources = new List<Source>();
-				
+                primitives = new List<Primitive>();
+                sources = new List<Source>();
+                
                 foreach (XmlNode child in node.ChildNodes)
                 {
                     switch (child.Name)
@@ -1393,9 +1403,9 @@ namespace ColladaSlimDX.ColladaDocument
 
                 if (sources.Count == 0) throw new ColladaException("<mesh does not contain a <source> : " + doc.filename);
                 if (vertices == null) throw new ColladaException("<mesh> does not contain a <vertices> : " + doc.filename);
-             
+                
             }
-              
+            
         }
         /// <summary>
         /// Base class to represent all the possible transforms in COLLADA.
@@ -1403,13 +1413,13 @@ namespace ColladaSlimDX.ColladaDocument
         [Serializable()]
         public class TransformNode
         {
-        	public static Random rand = new Random();
+            public static Random rand = new Random();
             protected float[] floats;
             public string sid;
             private TransformNode() { }
             public TransformNode(Document doc, XmlNode node)
-            {   
-            	sid = doc.Get<string>(node, "sid", "generatedSID_transformNode_" + rand.Next().ToString());
+            {
+                sid = doc.Get<string>(node, "sid", "generatedSID_transformNode_" + rand.Next().ToString());
                 floats = doc.GetArray<float>(node);
             }
             public float this[int i]
@@ -1481,7 +1491,7 @@ namespace ColladaSlimDX.ColladaDocument
         /// Base class to represent COLLADA instances.
         /// </summary>
         [Serializable()]
-        public class Instance 
+        public class Instance
         {
             List<Extra> extras;
             public Locator url;
@@ -1509,7 +1519,7 @@ namespace ColladaSlimDX.ColladaDocument
             {
                 XmlNode bindMaterialElement = node.SelectSingleNode("colladans:bind_material", doc.nsmgr);
                 if (bindMaterialElement != null)
-                    bindMaterial = new BindMaterial(doc, bindMaterialElement);    
+                    bindMaterial = new BindMaterial(doc, bindMaterialElement);
             }
         }
         /// <summary>
@@ -1526,34 +1536,32 @@ namespace ColladaSlimDX.ColladaDocument
         [Serializable()]
         public class InstanceController : InstanceWithMaterialBind
         {
-        	private Document doc;
-        	private bool searchCompleted = false;
+            private Document doc;
             private List<Locator> skeleton;
             public List<Locator> Skeleton
             {
-            	get
-            	{
-            		if (skeleton == null && !searchCompleted)
-            		{
-            			// No skeleton given. A behaviour seen in 3dmax.
-                		// Try to find a skeleton...
-                		searchCompleted = true;
-                		
-                		Node rootJoint = FindFirstRootJoint(doc);
-	                	if (rootJoint != null)
-	                	{
-	                		skeleton = new List<Locator>();
-	                		skeleton.Add(new Locator(doc, "#" + rootJoint.id));
-	                	}
-            		}
-            		return skeleton;
-            	}
+                get
+                {
+                    if (skeleton == null)
+                    {
+                        // No skeleton given. A behaviour seen in 3dmax.
+                        // Try to find a skeleton...
+                        
+                        Node rootJoint = FindFirstRootJoint(doc);
+                        if (rootJoint != null)
+                        {
+                            skeleton = new List<Locator>();
+                            skeleton.Add(new Locator(doc, "#" + rootJoint.id));
+                        }
+                    }
+                    return skeleton;
+                }
             }
 
             public InstanceController(Document doc, XmlNode node)
                 : base(doc, node)
             {
-            	this.doc = doc;
+                this.doc = doc;
 
                 foreach (XmlNode child in node.ChildNodes)
                 {
@@ -1577,18 +1585,43 @@ namespace ColladaSlimDX.ColladaDocument
             }
             
             protected Node FindFirstRootJoint(Document doc)
-	        {
-            	foreach (VisualScene vs in doc.visualScenes)
-            	{
-		        	foreach (Node n in vs.nodes)
-		        	{
-		    			if (n.type.ToLower() == "joint")
-		    				return n;
-		        	}
-            	}
-	        	
-	        	return null;
-	        }
+            {
+                foreach (VisualScene vs in doc.visualScenes)
+                {
+                    var result = FindFirstRootJoint(vs.nodes);
+                    if (result != null)
+                    {
+                        return result;
+                    }
+                }
+                
+                return null;
+            }
+            
+            protected Node FindFirstRootJoint(List<Node> nodes)
+            {
+                var result = nodes.FirstOrDefault(n => n.type.ToLower() == "joint");
+                if (result != null)
+                {
+                    return result;
+                }
+                else
+                {
+                    foreach (var n in nodes)
+                    {
+                        if (n.children != null)
+                        {
+                            result = FindFirstRootJoint(n.children);
+                            if (result != null)
+                            {
+                                return result;
+                            }
+                        }
+                    }
+                }
+                
+                return null;
+            }
         };
         /// <summary>
         /// Represents the COLLADA "<instance_material>" element.
@@ -1687,7 +1720,7 @@ namespace ColladaSlimDX.ColladaDocument
                     switch (child.Name)
                     {
                         case "param":
-                            Param param = new Param(doc, child); 
+                            Param param = new Param(doc, child);
                             if (parameters == null) parameters = new Dictionary<string,Param>();
                             parameters[param.name]=param;
                             break;
@@ -1861,8 +1894,8 @@ namespace ColladaSlimDX.ColladaDocument
                     nodes.Add(new Node(doc, nodeElement));
                 }
             }
-        }        
-        public interface ISkinOrMorph 
+        }
+        public interface ISkinOrMorph
         {
             //Locator Source;
         }
@@ -1900,7 +1933,7 @@ namespace ColladaSlimDX.ColladaDocument
                     switch (child.Name)
                     {
                         case "bind_shape_matrix":
-                            bindShapeMatrix = new Matrix(doc,child); 
+                            bindShapeMatrix = new Matrix(doc,child);
                             break;
                         case "source":
                             if (sources == null) sources = new List<Source>();
@@ -1910,7 +1943,7 @@ namespace ColladaSlimDX.ColladaDocument
                             // grab all the sub-elements
                             XmlNodeList inputElements = child.SelectNodes("colladans:input", doc.nsmgr);
                             if (inputElements.Count != 0)
-                              joint.inputs = new List<Input>();
+                                joint.inputs = new List<Input>();
                             else
                                 throw new ColladaException ("no <input> elements in <skin><joints>");
                             foreach (XmlNode inputElement in inputElements)
@@ -2079,7 +2112,7 @@ namespace ColladaSlimDX.ColladaDocument
                 }
                 
                 if (inputs.Count == 0)
-                	throw new MissingRequiredElementException("<sampler> must contain at least one <input> element!");
+                    throw new MissingRequiredElementException("<sampler> must contain at least one <input> element!");
 
             }
         }
@@ -2290,17 +2323,17 @@ namespace ColladaSlimDX.ColladaDocument
             if (assetElement != null)
             {
                 asset = new Asset(this, assetElement);
-            	coordinateSystem.Up = ParseUpAxis(asset);
-            	
-            	Vector3 right = new Vector3();
-            	if (coordinateSystem.Up.X == 1f)
-            		right.Y = -1f;
-            	else
-            		right.X = 1f;
-            	
-            	coordinateSystem.Right = right;
-            	
-            	coordinateSystem.Meter = asset.meter;
+                coordinateSystem.Up = ParseUpAxis(asset);
+                
+                Vector3 right = new Vector3();
+                if (coordinateSystem.Up.X == 1f)
+                    right.Y = -1f;
+                else
+                    right.X = 1f;
+                
+                coordinateSystem.Right = right;
+                
+                coordinateSystem.Meter = asset.meter;
             }
 
             // parse document for all libraries
@@ -2314,11 +2347,11 @@ namespace ColladaSlimDX.ColladaDocument
                     if (images == null) images = new List<Image>();
                     try
                     {
-                    	images.Add(new Image(this, imageElement));
+                        images.Add(new Image(this, imageElement));
                     }
                     catch (NonUniqueIDException e)
                     {
-                    	COLLADAUtil.Log(e);
+                        COLLADAUtil.Log(e);
                     }
                 }
             }
@@ -2332,11 +2365,11 @@ namespace ColladaSlimDX.ColladaDocument
                 {
                     try
                     {
-                    	materials.Add(new Material(this, materialElement));
+                        materials.Add(new Material(this, materialElement));
                     }
                     catch (NonUniqueIDException e)
                     {
-                    	COLLADAUtil.Log(e);
+                        COLLADAUtil.Log(e);
                     }
                 }
             }
@@ -2351,11 +2384,11 @@ namespace ColladaSlimDX.ColladaDocument
                     if (effects == null) effects = new List<Effect>();
                     try
                     {
-                    	effects.Add(new Effect(this, effectElement));
+                        effects.Add(new Effect(this, effectElement));
                     }
                     catch (NonUniqueIDException e)
                     {
-                    	COLLADAUtil.Log(e);
+                        COLLADAUtil.Log(e);
                     }
                 }
             }
@@ -2371,17 +2404,17 @@ namespace ColladaSlimDX.ColladaDocument
                     if (geometries == null) geometries = new List<Geometry>();
                     try
                     {
-                    	geometries.Add(new Geometry(this, geometryElement));
+                        geometries.Add(new Geometry(this, geometryElement));
                     }
                     catch (NonUniqueIDException e)
                     {
-                    	COLLADAUtil.Log(e);
+                        COLLADAUtil.Log(e);
                     }
                     catch (ColladaException e)
                     {
-                    	// most probably the geometry element defines a convex_mesh
-                    	// or spline geometry, which isn't supported -> ignore
-                    	COLLADAUtil.Log(e);
+                        // most probably the geometry element defines a convex_mesh
+                        // or spline geometry, which isn't supported -> ignore
+                        COLLADAUtil.Log(e);
                     }
                 }
             }
@@ -2397,11 +2430,11 @@ namespace ColladaSlimDX.ColladaDocument
                     if (controllers == null) controllers = new List<Controller>();
                     try
                     {
-                    	controllers.Add(new Controller(this, controllerElement));
+                        controllers.Add(new Controller(this, controllerElement));
                     }
                     catch (NonUniqueIDException e)
                     {
-                    	COLLADAUtil.Log(e);
+                        COLLADAUtil.Log(e);
                     }
                 }
             }
@@ -2417,11 +2450,11 @@ namespace ColladaSlimDX.ColladaDocument
                     if (nodes == null) nodes = new List<Node>();
                     try
                     {
-                    	nodes.Add(new Node(this, nodeElement));
+                        nodes.Add(new Node(this, nodeElement));
                     }
                     catch (NonUniqueIDException e)
                     {
-                    	COLLADAUtil.Log(e);
+                        COLLADAUtil.Log(e);
                     }
                 }
             }
@@ -2437,15 +2470,15 @@ namespace ColladaSlimDX.ColladaDocument
                     if (visualScenes == null) visualScenes = new List<VisualScene>();
                     try
                     {
-                    	visualScenes.Add(new VisualScene(this, visualSceneElement));
-                    } 
+                        visualScenes.Add(new VisualScene(this, visualSceneElement));
+                    }
                     catch (NonUniqueIDException e)
                     {
-                    	COLLADAUtil.Log(e);
+                        COLLADAUtil.Log(e);
                     }
                     catch (MissingRequiredElementException e)
                     {
-                    	COLLADAUtil.Log(e);
+                        COLLADAUtil.Log(e);
                     }
                 }
             }
@@ -2460,11 +2493,11 @@ namespace ColladaSlimDX.ColladaDocument
                 {
                     try
                     {
-                    	animations.Add(new Animation(this, animationElement));
+                        animations.Add(new Animation(this, animationElement));
                     }
                     catch (NonUniqueIDException e)
                     {
-                    	COLLADAUtil.Log(e);
+                        COLLADAUtil.Log(e);
                     }
                 }
             }
@@ -2495,16 +2528,16 @@ namespace ColladaSlimDX.ColladaDocument
         
         private Vector3 ParseUpAxis(Document.Asset asset)
         {
-        	switch (asset.up_axis.ToUpper())
-        	{
-        		case "X_UP":
-        			return new Vector3(1f, 0f, 0f);
-        		case "Z_UP":
-        			return new Vector3(0f, 0f, 1f);
-        		default:
-        			return new Vector3(0f, 1f, 0f);
-        	}
+            switch (asset.up_axis.ToUpper())
+            {
+                case "X_UP":
+                    return new Vector3(1f, 0f, 0f);
+                case "Z_UP":
+                    return new Vector3(0f, 0f, 1f);
+                default:
+                    return new Vector3(0f, 1f, 0f);
+            }
         }
     }
- }
+}
 
