@@ -67,7 +67,7 @@ namespace ColladaSlimDX.Utils
 		}
 		
 		/// <summary>
-		/// The vector in the outward direction of the coordinate system.
+		/// The vector in the inward direction of the coordinate system.
 		/// </summary>
 		public Vector3 Inward
 		{

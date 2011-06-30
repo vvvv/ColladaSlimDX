@@ -2263,19 +2263,22 @@ namespace ColladaSlimDX.ColladaDocument
                     }
                 }
         		
+        		// aspect_ratio = xmag / ymag
         		if (aspect_ratio == null) {
         			if (xmag == null) {
         				if (ymag == null) {
         					throw new ColladaException("Missing xmag, ymag and aspectRatio in <orthographic>");
         				} else {
-        					xmag = new Float(null, 1);
-        					aspect_ratio = new Float(null, xmag.theFloat / ymag.theFloat);
+        		            aspect_ratio = new Float(null, 1);
+        					xmag = new Float(null, aspect_ratio.theFloat * ymag.theFloat);
         				}
         			} else {
         				if (ymag == null) {
-        					ymag = new Float(null, 1);
-        				}
-        				aspect_ratio = new Float(null, xmag.theFloat / ymag.theFloat);
+        		            aspect_ratio = new Float(null, 1);
+        					ymag = new Float(null, xmag.theFloat / aspect_ratio.theFloat);
+        		        } else {
+        				    aspect_ratio = new Float(null, xmag.theFloat / ymag.theFloat);
+        		        }
         			}
         		} else {
         			if (xmag == null) {
@@ -2316,6 +2319,7 @@ namespace ColladaSlimDX.ColladaDocument
                     }
                 }
         		
+        		// aspect_ratio = xfov / yfov
         		if (aspect_ratio == null) 
         		{
         			if (xfov == null) 
@@ -2324,15 +2328,21 @@ namespace ColladaSlimDX.ColladaDocument
         					throw new ColladaException("Missing xfov, yfov and aspectRatio in <perspective>");
         				else 
         				{
-        					xfov = new Float(null, 1);
-        					aspect_ratio = new Float(null, xfov.theFloat / yfov.theFloat);
+        				    aspect_ratio = new Float(null, 1);
+        				    xfov = new Float(null, aspect_ratio.theFloat * yfov.theFloat);
         				}
         			} 
         			else
         			{
         				if (yfov == null)
-        					yfov = new Float(null, 1);
-        				aspect_ratio = new Float(null, xfov.theFloat / yfov.theFloat);
+        				{
+        				    aspect_ratio = new Float(null, 1);
+        				    yfov = new Float(null, xfov.theFloat / aspect_ratio.theFloat);
+        				}
+        				else
+        				{
+        				    aspect_ratio = new Float(null, xfov.theFloat / yfov.theFloat);
+        				}
         			}
         		} 
         		else
@@ -2372,7 +2382,7 @@ namespace ColladaSlimDX.ColladaDocument
                         {
                         	if (temp.Name == "perspective") {
                         		perspectiveOrOrthographic = new Perspective(doc, temp);
-                        	} else if (temp.Name != "orthographic") {
+                        	} else if (temp.Name == "orthographic") {
                         		perspectiveOrOrthographic = new Orthographic(doc, temp);
                         	} else
                             	throw new ColladaException("Illegal node <" + temp.Name + "> in <optics><technique_common> :" + doc.filename);
