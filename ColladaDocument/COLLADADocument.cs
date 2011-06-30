@@ -1001,6 +1001,10 @@ namespace ColladaSlimDX.ColladaDocument
             public string sid;
             public float theFloat;
             private Float() { }
+            public Float(string sid, float theFloat) {
+            	this.sid = sid;
+            	this.theFloat = theFloat;
+            }
             public Float(Document doc, XmlNode node)
             {
                 sid = doc.Get<string>(node, "sid", null);
@@ -2206,6 +2210,221 @@ namespace ColladaSlimDX.ColladaDocument
                 mesh = new Mesh(doc, meshElement);
             }
         }
+        public abstract class PerspectiveOrOrthographic {
+        	public Float aspect_ratio;
+        	public Float znear;
+        	public Float zfar;
+        	
+        	public PerspectiveOrOrthographic(Document doc, XmlNode node)
+            {
+        		foreach (XmlNode child in node.ChildNodes)
+                {
+                    switch (child.Name)
+                    {
+                        case "aspect_ratio":
+                            aspect_ratio = new Float(doc, child);
+                            break;
+                        case "znear":
+                            znear = new Float(doc, child);
+                            break;
+                        case "zfar":
+                            zfar = new Float(doc, child);
+                            break;
+                    }
+                }
+        		
+        		if (znear == null || zfar == null)
+        			throw new ColladaException("Missing znear or zfar in <" + node.Name + ">");
+        	}
+        }
+        	
+        /// <summary>
+        /// Represents the COLLADA "<orthographic>" element.
+        /// </summary>
+        public class Orthographic : PerspectiveOrOrthographic
+        {
+        	public Float xmag;
+        	public Float ymag;
+        	public List<Extra> extras;
+        	
+        	public Orthographic(Document doc, XmlNode node)
+                : base(doc, node)
+            {
+        		foreach (XmlNode child in node.ChildNodes)
+                {
+                    switch (child.Name)
+                    {
+                        case "xmag":
+                    		xmag = new Float(doc, child);
+                            break;
+                        case "ymag":
+                            ymag = new Float(doc, child);
+                            break;
+                    }
+                }
+        		
+        		if (aspect_ratio == null) {
+        			if (xmag == null) {
+        				if (ymag == null) {
+        					throw new ColladaException("Missing xmag, ymag and aspectRatio in <orthographic>");
+        				} else {
+        					xmag = new Float(null, 1);
+        					aspect_ratio = new Float(null, xmag.theFloat / ymag.theFloat);
+        				}
+        			} else {
+        				if (ymag == null) {
+        					ymag = new Float(null, 1);
+        				}
+        				aspect_ratio = new Float(null, xmag.theFloat / ymag.theFloat);
+        			}
+        		} else {
+        			if (xmag == null) {
+        				if (ymag == null) {
+        					throw new ColladaException("Missing xmag or ymag to aspectRatio in <orthographic>");
+        				} else {
+        					xmag = new Float(null, aspect_ratio.theFloat * ymag.theFloat);
+        				}
+        			} else {
+        				if (ymag == null) {
+        					ymag = new Float(null, xmag.theFloat / aspect_ratio.theFloat);
+        				}
+        			}
+        		}
+        	}
+        }
+        /// <summary>
+        /// Represents the COLLADA "<perspective>" element.
+        /// </summary>
+        public class Perspective : PerspectiveOrOrthographic
+        {
+        	public Float xfov;
+        	public Float yfov;
+        	
+        	public Perspective(Document doc, XmlNode node)
+                : base(doc, node)
+            {
+        		foreach (XmlNode child in node.ChildNodes)
+                {
+                    switch (child.Name)
+                    {
+                        case "xfov":
+                    		xfov = new Float(doc, child);
+                            break;
+                        case "yfov":
+                            yfov = new Float(doc, child);
+                            break;
+                    }
+                }
+        		
+        		if (aspect_ratio == null) 
+        		{
+        			if (xfov == null) 
+        			{
+        				if (yfov == null) 
+        					throw new ColladaException("Missing xfov, yfov and aspectRatio in <perspective>");
+        				else 
+        				{
+        					xfov = new Float(null, 1);
+        					aspect_ratio = new Float(null, xfov.theFloat / yfov.theFloat);
+        				}
+        			} 
+        			else
+        			{
+        				if (yfov == null)
+        					yfov = new Float(null, 1);
+        				aspect_ratio = new Float(null, xfov.theFloat / yfov.theFloat);
+        			}
+        		} 
+        		else
+        		{
+        			if (xfov == null) 
+        			{
+        				if (yfov == null) 
+        					throw new ColladaException("Missing xfov or yfov to aspectRatio in <perspective>");
+        				else
+        					xfov = new Float(null, aspect_ratio.theFloat * yfov.theFloat);
+        			} 
+        			else 
+        			{
+        				if (yfov == null) 
+        					yfov = new Float(null, xfov.theFloat / aspect_ratio.theFloat);
+        			}
+        		}
+        	}
+        }
+        /// <summary>
+        /// Represents the COLLADA "<optics>" element.
+        /// </summary>
+        public class Optics
+        {
+        	public PerspectiveOrOrthographic perspectiveOrOrthographic;
+        	public List<Extra> extras;
+        	
+        	private Optics() { }
+        	public Optics(Document doc, XmlNode node) 
+        	{
+        		foreach (XmlNode child in node.ChildNodes) 
+        		{
+        			switch(child.Name) 
+        			{
+    					case "technique_common":
+                        foreach (XmlNode temp in child.ChildNodes)
+                        {
+                        	if (temp.Name == "perspective") {
+                        		perspectiveOrOrthographic = new Perspective(doc, temp);
+                        	} else if (temp.Name != "orthographic") {
+                        		perspectiveOrOrthographic = new Orthographic(doc, temp);
+                        	} else
+                            	throw new ColladaException("Illegal node <" + temp.Name + "> in <optics><technique_common> :" + doc.filename);
+                        }
+                        break;
+                        
+                       	case "extra":
+                        if (extras == null) extras = new List<Extra>();
+                        extras.Add(new Extra(doc, child));
+                        break;
+                        
+                       	case "technique":
+                        break;
+        			}
+        		}
+        		
+        		if (perspectiveOrOrthographic == null)
+        			throw new ColladaException("Missing technique_common in <optics>");
+        	}
+        }
+        /// <summary>
+        /// Represents the COLLADA "<camera>" element.
+        /// </summary>
+        [Serializable()]
+        public class Camera : Element
+        {
+        	public Optics optics;
+        	public List<Extra> extras;
+        	
+        	public Camera(Document doc, XmlNode node)
+                : base(doc, node)
+            {
+        		foreach (XmlNode child in node.ChildNodes) 
+        		{
+        			switch(child.Name) 
+        			{
+        				case "optics":
+        					optics = new Optics(doc, child);
+        					break;
+        				case "imager":
+        					break;
+        				case "extra":
+        					if (extras == null) extras = new List<Extra>();
+        					extras.Add(new Extra(doc, child));
+        					break;
+        			}
+        		}
+        		
+        		if (optics == null)
+        			throw new ColladaException("Missing optics in <camera>");
+        	}
+        }
         /// <summary>
         /// Represents the COLLADA "<image>" element.
         /// </summary>
@@ -2279,6 +2498,7 @@ namespace ColladaSlimDX.ColladaDocument
         public List<Node> nodes;
         public List<VisualScene> visualScenes;
         public List<Animation> animations;
+        public List<Camera> cameras;
         public Asset asset;
         public InstanceScene instanceVisualScene;
         public InstanceScene instancePhysicsScene;
@@ -2501,6 +2721,26 @@ namespace ColladaSlimDX.ColladaDocument
                     }
                 }
             }
+            
+            XmlNodeList cameraLibs = root.SelectNodes("colladans:library_cameras", nsmgr);
+            cameras = new List<Camera>();
+            foreach (XmlNode cameraLib in cameraLibs)
+            {
+                XmlNodeList cameraElements = cameraLib.SelectNodes("colladans:camera", nsmgr);
+
+                foreach (XmlNode cameraElement in cameraElements)
+                {
+                    try
+                    {
+                    	cameras.Add(new Camera(this, cameraElement));
+                    }
+                    catch (NonUniqueIDException e)
+                    {
+                    	COLLADAUtil.Log(e);
+                    }
+                }
+            }
+            
             // Load the scene for display in the viewer
 
             XmlNode sceneElement = root.SelectSingleNode("colladans:scene", nsmgr);

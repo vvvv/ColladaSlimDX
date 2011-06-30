@@ -23,7 +23,7 @@ using ColladaSlimDX.ColladaDocument;
 namespace ColladaSlimDX.Utils
 {
 
-    public class COLLADAUtil
+    public static class COLLADAUtil
     {
         /// <summary>
         /// Helper function, returns the p[] value for the given index
@@ -31,7 +31,7 @@ namespace ColladaSlimDX.Utils
         /// <param name="input">The "<input>" element we need the index of.</param>
         /// <param name="primitive">The "<primitive>" element the "<input>" is from.</param>
         /// <param name="index"> The index for which we need the p[] value.</param>
-        static public int GetPValue(Document.Input input, Document.Primitive primitive, int index)
+        public static int GetPValue(Document.Input input, Document.Primitive primitive, int index)
         {
             int stride = primitive.stride;
             int offset = input.offset;
@@ -70,7 +70,7 @@ namespace ColladaSlimDX.Utils
         /// Helper function, returns the "<input>" that has the POSITION semantic
         /// </summary>
         /// <param name="mesh">The "<mesh>" element we need the POSITION from.</param>
-        static public Document.Input GetPositionInput(Document.Mesh mesh)
+        public static Document.Input GetPositionInput(Document.Mesh mesh)
         {
             int i;
             for (i = 0; i < mesh.vertices.inputs.Count; i++)
@@ -86,7 +86,7 @@ namespace ColladaSlimDX.Utils
         /// <param name="doc">The COLLADA document</param>
         /// <param name="primitive"> The "<primitive>" we need the inputs from.</param>
         /// </summary>
-        static public List<Document.Input> GetAllInputs(Document.Primitive primitive)
+        public static List<Document.Input> GetAllInputs(Document.Primitive primitive)
         {
             List<Document.Input> inputs = new List<Document.Input>();
 
