@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
+using System.Linq;
 
 using ColladaSlimDX.ColladaDocument;
 using ColladaSlimDX.Utils;
@@ -1486,19 +1487,21 @@ namespace ColladaSlimDX.ColladaModel
         
         public class SkinnedInstanceMesh : InstanceMesh
         {
-            
-            private Document.Node skeletonRootNode;
-            
-            private Bone skeletonRootBone;
-            public Bone SkeletonRootBone
+            private CSkinnedMesh skinnedMesh;
+
+            private Bone rootBone;
+            public Bone RootBone
             {
                 get
                 {
-                    return skeletonRootBone;
+                    if (rootBone == null)
+                    {
+                        LoadBones();
+                        rootBone = bones.Select(b => b.Parent).First(p => !bones.Contains(p));
+                    }
+                    return rootBone;
                 }
             }
-            
-            private CSkinnedMesh skinnedMesh;
             
             private List<Bone> bones;
             public List<Bone> Bones
@@ -1521,6 +1524,7 @@ namespace ColladaSlimDX.ColladaModel
             private List<Matrix> invBindMatrixList;
             
             private Matrix bindShapeMatrix;
+            private Document.Node[] skeletonRootNodes;
             public Matrix BindShapeMatrix
             {
                 get
@@ -1530,11 +1534,11 @@ namespace ColladaSlimDX.ColladaModel
             }
             
             public SkinnedInstanceMesh(CSkinnedMesh mesh, Bone parentBone,
-                                       Dictionary<string, string> materialBinding, Document.Node skeletonRootNode)
+                                       Dictionary<string, string> materialBinding, Document.Node[] skeletonRootNodes)
                 : base(mesh, parentBone, materialBinding)
             {
                 this.skinnedMesh = mesh;
-                this.skeletonRootNode = skeletonRootNode;
+                this.skeletonRootNodes = skeletonRootNodes;
                 
                 bindShapeMatrix = new Matrix();
                 bindShapeMatrix.M11 = mesh.Skin.bindShapeMatrix[0, 0];
@@ -1574,9 +1578,7 @@ namespace ColladaSlimDX.ColladaModel
                     bones = new List<Bone>();
                     invBindMatrixList = new List<Matrix>();
                     Document.Source source;
-                    
-                    ((CSkinnedMesh)Mesh).Model.BonesTable.TryGetValue(skeletonRootNode.id, out skeletonRootBone);
-                    
+                     
                     Model model = skinnedMesh.Model;
                     foreach (Document.Input input in skinnedMesh.Skin.joint.inputs)
                     {
@@ -1599,10 +1601,10 @@ namespace ColladaSlimDX.ColladaModel
                                         }
                                         break;
                                     case "Name_array":
-                                        // target nodes are relative to skeletonRootNode
+                                        // target nodes are relative to skeletonRootNodes
                                         for (int i = 0; i < keys.Count; i++)
                                         {
-                                            Document.Node node = COLLADAUtil.GetNodeByName(skeletonRootNode, keys[i]);
+                                            Document.Node node = skeletonRootNodes.Select(n => COLLADAUtil.GetNodeByName(n, keys[i])).First(n => n != null);
                                             if (model.BonesTable.TryGetValue(node.id, out bone))
                                                 bones.Add(bone);
                                             else
@@ -1857,177 +1859,182 @@ namespace ColladaSlimDX.ColladaModel
             Bone bone = new Bone(this, parent, node.id);
 
             if (node.instances != null)
-                foreach (Document.Instance instance in node.instances)
             {
-                if (instance is Document.InstanceGeometry)
+                foreach (Document.Instance instance in node.instances)
                 {
-                    // resolve bindings
-                    Dictionary<string, string> materialBinding = ResolveMaterialBinding((Document.InstanceWithMaterialBind)instance);
-
-                    Document.Geometry geo = (Document.Geometry)doc.dic[instance.url.Fragment];
-                    CMesh modelMesh;
-                    if (meshes.TryGetValue(geo.id, out modelMesh))
-                    {
-                        InstanceMesh instanceMesh = new InstanceMesh(modelMesh,
-                                                                     bone,
-                                                                     materialBinding);
-                        instanceMeshes.Add(instanceMesh);
-                    }
-                    else
-                        COLLADAUtil.Log(COLLADALogType.Error, "mesh with id " + geo.id + " not found in internal mesh list");
-                }
-                else if (instance is Document.InstanceCamera)
-                {
-                    Document.InstanceCamera instanceCamera = (Document.InstanceCamera) instance;
-                    Document.Camera docCam = (Document.Camera) doc.dic[instanceCamera.url.Fragment];
-                    if (docCam != null)
-                    {
-                        Camera camera;
-                        if (cameras.TryGetValue(docCam.id, out camera))
-                        {
-                            InstanceCamera c = new InstanceCamera(camera, bone);
-                            instanceCameras.Add(c);
-                        }
-                        else
-                            COLLADAUtil.Log(COLLADALogType.Error, "Camera " + docCam.id + " not found in internal camera list.");
-                    }
-                    else
-                        COLLADAUtil.Log(COLLADALogType.Error, "Camera " + instanceCamera.url.Fragment + " not found.");
-                }
-                else if (instance is Document.InstanceLight)
-                {
-                    // TODO: light
-                }
-                else if (instance is Document.InstanceController)
-                {
-                    Document.InstanceController instanceController = (Document.InstanceController) instance;
-                    Document.ISkinOrMorph skinOrMorph = ((Document.Controller)doc.dic[instanceController.url.Fragment]).controller;
-                    if (skinOrMorph is Document.Skin)
+                    if (instance is Document.InstanceGeometry)
                     {
                         // resolve bindings
                         Dictionary<string, string> materialBinding = ResolveMaterialBinding((Document.InstanceWithMaterialBind)instance);
-                        Document.Skin skin = (Document.Skin) skinOrMorph;
-                        Document.Geometry geo = ((Document.Geometry)doc.dic[skin.source.Fragment]);
-                        
-                        // make sure mesh is in loaded mesh list
-                        CMesh mesh;
-                        if (meshes.TryGetValue(geo.id, out mesh))
-                        {
-                            // mesh was loaded once successfully, try to look for it in the list of skinned
-                            // meshes (skinned meshes have different vertex declarations)...
-                            CSkinnedMesh skinnedMesh;
-                            if (!skinnedMeshes.TryGetValue(geo.id, out skinnedMesh))
-                            {
-                                // mesh wasn't found, create it once
-                                skinnedMesh = new CSkinnedMesh(this, geo, skin);
-                                skinnedMeshes.Add(geo.id, skinnedMesh);
-                            }
 
-                            string frag = instanceController.Skeleton[0].Fragment;
-                            Document.Node skeletonRootNode = (Document.Node) doc.dic[frag];
-                            SkinnedInstanceMesh skinnedInstanceMesh = new SkinnedInstanceMesh(
-                                skinnedMesh,
-                                bone,
-                                materialBinding,
-                                skeletonRootNode);
-                            instanceMeshes.Add(skinnedInstanceMesh);
+                        Document.Geometry geo = (Document.Geometry)doc.dic[instance.url.Fragment];
+                        CMesh modelMesh;
+                        if (meshes.TryGetValue(geo.id, out modelMesh))
+                        {
+                            InstanceMesh instanceMesh = new InstanceMesh(modelMesh,
+                                                                         bone,
+                                                                         materialBinding);
+                            instanceMeshes.Add(instanceMesh);
                         }
                         else
                             COLLADAUtil.Log(COLLADALogType.Error, "mesh with id " + geo.id + " not found in internal mesh list");
-                        
                     }
-                    else if (skinOrMorph is Document.Morph)
+                    else if (instance is Document.InstanceCamera)
                     {
-                        // TODO: morph
+                        Document.InstanceCamera instanceCamera = (Document.InstanceCamera)instance;
+                        Document.Camera docCam = (Document.Camera)doc.dic[instanceCamera.url.Fragment];
+                        if (docCam != null)
+                        {
+                            Camera camera;
+                            if (cameras.TryGetValue(docCam.id, out camera))
+                            {
+                                InstanceCamera c = new InstanceCamera(camera, bone);
+                                instanceCameras.Add(c);
+                            }
+                            else
+                                COLLADAUtil.Log(COLLADALogType.Error, "Camera " + docCam.id + " not found in internal camera list.");
+                        }
+                        else
+                            COLLADAUtil.Log(COLLADALogType.Error, "Camera " + instanceCamera.url.Fragment + " not found.");
+                    }
+                    else if (instance is Document.InstanceLight)
+                    {
+                        // TODO: light
+                    }
+                    else if (instance is Document.InstanceController)
+                    {
+                        Document.InstanceController instanceController = (Document.InstanceController)instance;
+                        Document.ISkinOrMorph skinOrMorph = ((Document.Controller)doc.dic[instanceController.url.Fragment]).controller;
+                        if (skinOrMorph is Document.Skin)
+                        {
+                            // resolve bindings
+                            Dictionary<string, string> materialBinding = ResolveMaterialBinding((Document.InstanceWithMaterialBind)instance);
+                            Document.Skin skin = (Document.Skin)skinOrMorph;
+                            Document.Geometry geo = ((Document.Geometry)doc.dic[skin.source.Fragment]);
+
+                            // make sure mesh is in loaded mesh list
+                            CMesh mesh;
+                            if (meshes.TryGetValue(geo.id, out mesh))
+                            {
+                                // mesh was loaded once successfully, try to look for it in the list of skinned
+                                // meshes (skinned meshes have different vertex declarations)...
+                                CSkinnedMesh skinnedMesh;
+                                if (!skinnedMeshes.TryGetValue(geo.id, out skinnedMesh))
+                                {
+                                    // mesh wasn't found, create it once
+                                    skinnedMesh = new CSkinnedMesh(this, geo, skin);
+                                    skinnedMeshes.Add(geo.id, skinnedMesh);
+                                }
+
+                                var skeletonRootNodes = instanceController.Skeleton.Select(s => (Document.Node)doc.dic[s.Fragment]).ToArray();
+                                SkinnedInstanceMesh skinnedInstanceMesh = new SkinnedInstanceMesh(
+                                    skinnedMesh,
+                                    bone,
+                                    materialBinding,
+                                    skeletonRootNodes);
+                                instanceMeshes.Add(skinnedInstanceMesh);
+                            }
+                            else
+                                COLLADAUtil.Log(COLLADALogType.Error, "mesh with id " + geo.id + " not found in internal mesh list");
+
+                        }
+                        else if (skinOrMorph is Document.Morph)
+                        {
+                            // TODO: morph
+                        }
+                        else
+                            throw new Exception("Unknowned type of controller:" + skinOrMorph.GetType().ToString());
+                    }
+                    else if (instance is Document.InstanceNode)
+                    {
+                        Document.Node instanceNode = ((Document.Node)doc.dic[instance.url.Fragment]);
+                        bone.Children.Add(ReadNode(bone, instanceNode));
+
                     }
                     else
-                        throw new Exception("Unknowned type of controller:" + skinOrMorph.GetType().ToString());
+                        throw new Exception("Unkowned type of INode in scene :" + instance.GetType().ToString());
                 }
-                else if (instance is Document.InstanceNode)
-                {
-                    Document.Node instanceNode = ((Document.Node)doc.dic[instance.url.Fragment]);
-                    bone.Children.Add(ReadNode(bone, instanceNode));
-
-                }
-                else
-                    throw new Exception("Unkowned type of INode in scene :" + instance.GetType().ToString());
             }
 
             // read transforms
-
             if (node.transforms != null)
+            {
                 foreach (Document.TransformNode transformNode in node.transforms)
-            {
-
-                if (transformNode is Document.Translate)
-                    bone.Transforms.Add(transformNode.sid, new TranslateTransform(new Vector3(transformNode[0], transformNode[1], transformNode[2])));
-                else if (transformNode is Document.Rotate)
-                    bone.Transforms.Add(transformNode.sid, new RotateTransform(new Vector3(transformNode[0], transformNode[1], transformNode[2]), transformNode[3]));
-                else if (transformNode is Document.Lookat)
-                    bone.Transforms.Add(transformNode.sid, new Transform(Matrix.LookAtLH(new Vector3(transformNode[0], transformNode[1], transformNode[2]), new Vector3(transformNode[3], transformNode[4], transformNode[5]), new Vector3(transformNode[6], transformNode[7], transformNode[8]))));
-                else if (transformNode is Document.Matrix)
                 {
-                    Matrix m = Matrix.Identity;
-                    m.M11 = transformNode[0];
-                    m.M21 = transformNode[01];
-                    m.M31 = transformNode[02];
-                    m.M41 = transformNode[03];
-                    m.M12 = transformNode[04];
-                    m.M22 = transformNode[05];
-                    m.M32 = transformNode[06];
-                    m.M42 = transformNode[07];
-                    m.M13 = transformNode[08];
-                    m.M23 = transformNode[09];
-                    m.M33 = transformNode[10];
-                    m.M43 = transformNode[11];
-                    m.M14 = transformNode[12];
-                    m.M24 = transformNode[13];
-                    m.M34 = transformNode[14];
-                    m.M44 = transformNode[15];
-                    bone.Transforms.Add(transformNode.sid, new Transform(m));
+                    if (transformNode is Document.Translate)
+                        bone.Transforms.Add(transformNode.sid, new TranslateTransform(new Vector3(transformNode[0], transformNode[1], transformNode[2])));
+                    else if (transformNode is Document.Rotate)
+                        bone.Transforms.Add(transformNode.sid, new RotateTransform(new Vector3(transformNode[0], transformNode[1], transformNode[2]), transformNode[3]));
+                    else if (transformNode is Document.Lookat)
+                        bone.Transforms.Add(transformNode.sid, new Transform(Matrix.LookAtLH(new Vector3(transformNode[0], transformNode[1], transformNode[2]), new Vector3(transformNode[3], transformNode[4], transformNode[5]), new Vector3(transformNode[6], transformNode[7], transformNode[8]))));
+                    else if (transformNode is Document.Matrix)
+                    {
+                        Matrix m = Matrix.Identity;
+                        m.M11 = transformNode[0];
+                        m.M21 = transformNode[01];
+                        m.M31 = transformNode[02];
+                        m.M41 = transformNode[03];
+                        m.M12 = transformNode[04];
+                        m.M22 = transformNode[05];
+                        m.M32 = transformNode[06];
+                        m.M42 = transformNode[07];
+                        m.M13 = transformNode[08];
+                        m.M23 = transformNode[09];
+                        m.M33 = transformNode[10];
+                        m.M43 = transformNode[11];
+                        m.M14 = transformNode[12];
+                        m.M24 = transformNode[13];
+                        m.M34 = transformNode[14];
+                        m.M44 = transformNode[15];
+                        bone.Transforms.Add(transformNode.sid, new Transform(m));
+                    }
+                    else if (transformNode is Document.Scale)
+                    {
+                        bone.Transforms.Add(transformNode.sid, new ScaleTransform(new Vector3(transformNode[0], transformNode[1], transformNode[2])));
+                    }
+                    else if (transformNode is Document.Skew)
+                    {
+                        // Convert Skew to a matrix
+                        float angle = transformNode[0] * (float)DegToRad;
+                        Vector3 a = new Vector3(transformNode[1], transformNode[2], transformNode[3]);
+                        Vector3 b = new Vector3(transformNode[4], transformNode[5], transformNode[6]);
+                        Vector3 n2 = Vector3.Normalize(b);
+                        Vector3 a1 = n2 * Vector3.Dot(a, n2);
+                        Vector3 a2 = a - a1;
+                        Vector3 n1 = Vector3.Normalize(a2);
+                        float an1 = Vector3.Dot(a, n1);
+                        float an2 = Vector3.Dot(a, n2);
+                        double rx = an1 * Math.Cos(angle) - an2 * Math.Sin(angle);
+                        double ry = an1 * Math.Sin(angle) + an2 * Math.Cos(angle);
+                        float alpha = 0.0f;
+                        Matrix m = Matrix.Identity;
+
+                        if (rx <= 0.0) throw new Exception("Skew: angle too large");
+                        if (an1 != 0) alpha = (float)(ry / rx - an2 / an1);
+
+                        m.M11 = n1.X * n2.X * alpha + 1.0f;
+                        m.M12 = n1.Y * n2.X * alpha;
+                        m.M13 = n1.Z * n2.X * alpha;
+
+                        m.M21 = n1.X * n2.Y * alpha;
+                        m.M22 = n1.Y * n2.Y * alpha + 1.0f;
+                        m.M23 = n1.Z * n2.Y * alpha;
+
+                        m.M31 = n1.X * n2.Z * alpha;
+                        m.M32 = n1.Y * n2.Z * alpha;
+                        m.M33 = n1.Z * n2.Z * alpha + 1.0f;
+
+                        bone.Transforms.Add(transformNode.sid, new Transform(m));
+                    }
                 }
-                else if (transformNode is Document.Scale)
-                    bone.Transforms.Add(transformNode.sid, new ScaleTransform(new Vector3(transformNode[0], transformNode[1], transformNode[2])));
-                else if (transformNode is Document.Skew)
+
+                if (node.children != null)
                 {
-                    // Convert Skew to a matrix
-                    float angle = transformNode[0] * (float) DegToRad;
-                    Vector3 a = new Vector3(transformNode[1], transformNode[2], transformNode[3]);
-                    Vector3 b = new Vector3(transformNode[4], transformNode[5], transformNode[6]);
-                    Vector3 n2 = Vector3.Normalize(b);
-                    Vector3 a1 = n2 * Vector3.Dot(a, n2);
-                    Vector3 a2 = a - a1;
-                    Vector3 n1 = Vector3.Normalize(a2);
-                    float an1 = Vector3.Dot(a, n1);
-                    float an2 = Vector3.Dot(a, n2);
-                    double rx = an1 * Math.Cos(angle) - an2 * Math.Sin(angle);
-                    double ry = an1 * Math.Sin(angle) + an2 * Math.Cos(angle);
-                    float alpha = 0.0f;
-                    Matrix m = Matrix.Identity;
-
-                    if (rx <= 0.0) throw new Exception("Skew: angle too large");
-                    if (an1 != 0) alpha = (float)(ry / rx - an2 / an1);
-
-                    m.M11 = n1.X * n2.X * alpha + 1.0f;
-                    m.M12 = n1.Y * n2.X * alpha;
-                    m.M13 = n1.Z * n2.X * alpha;
-
-                    m.M21 = n1.X * n2.Y * alpha;
-                    m.M22 = n1.Y * n2.Y * alpha + 1.0f;
-                    m.M23 = n1.Z * n2.Y * alpha;
-
-                    m.M31 = n1.X * n2.Z * alpha;
-                    m.M32 = n1.Y * n2.Z * alpha;
-                    m.M33 = n1.Z * n2.Z * alpha + 1.0f;
-
-                    bone.Transforms.Add(transformNode.sid, new Transform(m));
+                    foreach (Document.Node child in node.children)
+                    {
+                        bone.Children.Add(ReadNode(bone, child));
+                    }
                 }
-            }
-
-            if (node.children != null)
-                foreach (Document.Node child in node.children)
-            {
-                bone.Children.Add(ReadNode(bone,child));
             }
 
             return bone;
