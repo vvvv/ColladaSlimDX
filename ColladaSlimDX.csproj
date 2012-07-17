@@ -12,7 +12,6 @@
     <WarningLevel>4</WarningLevel>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <OutputPath>bin\</OutputPath>
-    <ReferencePath>$(VVVV45)\bin\managed\</ReferencePath>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
@@ -41,9 +40,12 @@
     <Optimize>False</Optimize>
     <CheckForOverflowUnderflow>True</CheckForOverflowUnderflow>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <StartAction>Program</StartAction>
+    <StartProgram>..\vvvv\public\vvvv45\vvvv.exe</StartProgram>
+    <StartArguments>d /dx9ex</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-    <DebugSymbols>False</DebugSymbols>
+    <DebugSymbols>false</DebugSymbols>
     <DebugType>None</DebugType>
     <Optimize>True</Optimize>
     <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
@@ -61,8 +63,7 @@
     <Reference Include="dnAnalytics">
       <HintPath>thirdparty\dnAnalytics\dnAnalytics.dll</HintPath>
     </Reference>
-    <Reference Include="SlimDX, Version=4.0.12.43, Culture=neutral, PublicKeyToken=b1b0c32fd1ffe4f9, processorArchitecture=x86">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="SlimDX">
       <HintPath>thirdparty\SlimDX.dll</HintPath>
     </Reference>
     <Reference Include="System" />

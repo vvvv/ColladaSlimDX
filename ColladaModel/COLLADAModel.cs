@@ -449,7 +449,12 @@ namespace ColladaSlimDX.ColladaModel
             
             public virtual Mesh Create3D9Mesh(Device graphicsDevice, ref int attribId)
             {
-                Mesh mesh = new Mesh(graphicsDevice, FaceCount, VertexCount, MeshFlags.Use32Bit | MeshFlags.Managed, VertexElements.ToArray());
+            	var options = MeshFlags.Use32Bit;
+				if (graphicsDevice is DeviceEx)
+					options |= MeshFlags.Dynamic;
+				else
+					options |= MeshFlags.Managed;
+                Mesh mesh = new Mesh(graphicsDevice, FaceCount, VertexCount, options, VertexElements.ToArray());
                 fillVertexBuffer(mesh);
                 fillIndexBuffer(mesh);
                 fillAttributeBuffer(mesh, ref attribId);
