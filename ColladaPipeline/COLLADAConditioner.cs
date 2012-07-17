@@ -17,12 +17,12 @@ using System.IO;
 using System.Collections;
 using System.Collections.Generic;
 
-using ColladaSlimDX.Utils;
-using ColladaSlimDX.ColladaDocument;
+using ColladaSharpDX.Utils;
+using ColladaSharpDX.ColladaDocument;
 
 #endregion
 
-namespace ColladaSlimDX.ColladaPipeline
+namespace ColladaSharpDX.ColladaPipeline
 {
     public class Conditioner
     {

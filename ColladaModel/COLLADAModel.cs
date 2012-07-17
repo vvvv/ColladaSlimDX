@@ -17,10 +17,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 
-using ColladaSlimDX.ColladaDocument;
-using ColladaSlimDX.Utils;
-using SlimDX;
-using SlimDX.Direct3D9;
+using ColladaSharpDX.ColladaDocument;
+using ColladaSharpDX.Utils;
+using SharpDX;
+using SharpDX.Direct3D9;
 
 //using Microsoft.Xna.Framework; // Vector3
 //using Microsoft.Xna.Framework.Graphics;
@@ -30,7 +30,7 @@ using SlimDX.Direct3D9;
 
 #endregion
 
-namespace ColladaSlimDX.ColladaModel
+namespace ColladaSharpDX.ColladaModel
 {
     
     [Serializable()]
@@ -448,7 +448,10 @@ namespace ColladaSlimDX.ColladaModel
             
             public virtual Mesh Create3D9Mesh(Device graphicsDevice, ref int attribId)
             {
-                Mesh mesh = new Mesh(graphicsDevice, FaceCount, VertexCount, MeshFlags.Use32Bit | MeshFlags.Managed, VertexElements.ToArray());
+            	var options = MeshFlags.Use32Bit;
+				if (!(graphicsDevice is DeviceEx))
+					options |= MeshFlags.Managed;
+                Mesh mesh = new Mesh(graphicsDevice, FaceCount, VertexCount, options VertexElements.ToArray());
                 fillVertexBuffer(mesh);
                 fillIndexBuffer(mesh);
                 fillAttributeBuffer(mesh, ref attribId);

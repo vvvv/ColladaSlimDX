@@ -17,10 +17,10 @@ using System.IO;
 using System.Collections;
 using System.Collections.Generic;
 
-using ColladaSlimDX.ColladaDocument;
+using ColladaSharpDX.ColladaDocument;
 #endregion
 
-namespace ColladaSlimDX.Utils
+namespace ColladaSharpDX.Utils
 {
 
     public static class COLLADAUtil

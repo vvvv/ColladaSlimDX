@@ -20,8 +20,8 @@ using System.Globalization;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using SlimDX;
-using ColladaSlimDX.Utils;
+using SharpDX;
+using ColladaSharpDX.Utils;
 
 // XmlDocument
 // Console
@@ -35,7 +35,7 @@ using ColladaSlimDX.Utils;
 #endregion
 
 
-namespace ColladaSlimDX.ColladaDocument
+namespace ColladaSharpDX.ColladaDocument
 {
     // Summary:
     //     Represents a COLLADA document

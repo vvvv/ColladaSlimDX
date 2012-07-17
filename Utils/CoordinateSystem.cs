@@ -1,9 +1,9 @@
-﻿using SlimDX;
+﻿using SharpDX;
 using DNMatrix = dnAnalytics.LinearAlgebra.Matrix;
 using DNMatrixImpl = dnAnalytics.LinearAlgebra.DenseMatrix;
 using DNSolver = dnAnalytics.LinearAlgebra.Solvers.Direct.LUSolver;
 
-namespace ColladaSlimDX.Utils
+namespace ColladaSharpDX.Utils
 {
 	
 	public enum CoordinateSystemType { LeftHanded, RightHanded };

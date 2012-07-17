@@ -1,4 +1,5 @@
-﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="3.5">
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <PropertyGroup>
     <ProjectGuid>{2C3DD320-A532-11DD-AD8B-0800200C9A66}</ProjectGuid>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -12,7 +13,8 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <OutputPath>bin\</OutputPath>
     <ReferencePath>$(VVVV45)\bin\managed\</ReferencePath>
-    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -40,8 +42,11 @@
     <Reference Include="dnAnalytics">
       <HintPath>thirdparty\dnAnalytics\dnAnalytics.dll</HintPath>
     </Reference>
-    <Reference Include="SlimDX">
-      <HintPath>..\..\vvvv50\lib\SlimDX.dll</HintPath>
+    <Reference Include="SharpDX">
+      <HintPath>..\vvvv\public\vvvv45\src\thirdparty\SharpDX.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.Direct3D9">
+      <HintPath>..\vvvv\public\vvvv45\src\thirdparty\SharpDX.Direct3D9.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
