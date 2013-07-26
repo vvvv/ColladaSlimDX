@@ -153,6 +153,7 @@ namespace ColladaSlimDX.ColladaModel
                 DeclarationType vertexElementFormat;
                 DeclarationUsage vertexElementUsage;
                 byte usageIndex;
+                byte texcoordUsageIndex = 0;
 
                 foreach (Document.Input input in COLLADAUtil.GetAllInputs(primitive))
                 {
@@ -175,7 +176,7 @@ namespace ColladaSlimDX.ColladaModel
                             break;
                         case "TEXCOORD":
                             vertexElementUsage = DeclarationUsage.TextureCoordinate;
-                            usageIndex = 0; // TODO handle several texture (need to replace BasicMaterial first)
+                            usageIndex = texcoordUsageIndex++;
                             break;
                         case "TEXTANGENT":
                         case "TEXBINORMAL":
@@ -306,6 +307,7 @@ namespace ColladaSlimDX.ColladaModel
                         DeclarationType vertexElementFormat;
                         DeclarationUsage vertexElementUsage;
                         byte usageIndex;
+                        byte texcoordUsageIndex = 0;
                         foreach (Document.Input input in COLLADAUtil.GetAllInputs(primitive))
                         {
                             switch (input.semantic)
@@ -324,7 +326,7 @@ namespace ColladaSlimDX.ColladaModel
                                     break;
                                 case "TEXCOORD":
                                     vertexElementUsage = DeclarationUsage.TextureCoordinate;
-                                    usageIndex = 0; // TODO handle several texture (need to replace BasicMaterial first)
+                                    usageIndex = texcoordUsageIndex++;
                                     break;
                                 case "TEXTANGENT":
                                 case "TEXBINORMAL":
@@ -335,7 +337,7 @@ namespace ColladaSlimDX.ColladaModel
                                     throw new Exception("Unexeptected vertexElementUsage=" + input.semantic);
                             }
                             
-                            // assuming floats !
+                            // assuming floats !o
                             switch (((Document.Source)input.source).accessor.ParameterCount)
                             {
                                 case 2:
