@@ -179,9 +179,12 @@ namespace ColladaSlimDX.ColladaModel
                             usageIndex = texcoordUsageIndex++;
                             break;
                         case "TEXTANGENT":
+                            vertexElementUsage = DeclarationUsage.Tangent;
+                            usageIndex = 0;
+                            break;
                         case "TEXBINORMAL":
-                            vertexElementUsage = DeclarationUsage.Color; // Whatever, just for C# to stop complaining
-                            usageIndex = 0; // Whatever
+                            vertexElementUsage = DeclarationUsage.Binormal;
+                            usageIndex = 0;
                             break;
                         default:
                             throw new Exception("Unexeptected vertexElementUsage=" + input.semantic);
@@ -329,10 +332,13 @@ namespace ColladaSlimDX.ColladaModel
                                     usageIndex = texcoordUsageIndex++;
                                     break;
                                 case "TEXTANGENT":
+                                    vertexElementUsage = DeclarationUsage.Tangent;
+                            		usageIndex = 0;
+                            		break;
                                 case "TEXBINORMAL":
-                                    vertexElementUsage = DeclarationUsage.Color; // Whatever, just for C# to stop complaining
-                                    usageIndex = 0; // Whatever
-                                    break;
+                                    vertexElementUsage = DeclarationUsage.Binormal;
+                            		usageIndex = 0;
+                            		break;
                                 default:
                                     throw new Exception("Unexeptected vertexElementUsage=" + input.semantic);
                             }
@@ -801,6 +807,22 @@ namespace ColladaSlimDX.ColladaModel
             private string name;
             //
             // Summary:
+            //     Gets the name attribute of this bone.
+            //
+            // Returns:
+            //     The name of this bone.
+            public string NodeName { get { return nodeName; } set { nodeName = value; } }
+            private string nodeName;
+            //
+            // Summary:
+            //     Gets the type of this bone.
+            //
+            // Returns:
+            //     The name of this bone.
+            public string NodeType { get { return nodeType; } set { nodeType = value; } }
+            private string nodeType;
+            //
+            // Summary:
             //     Gets the parent of this bone.
             //
             // Returns:
@@ -840,7 +862,7 @@ namespace ColladaSlimDX.ColladaModel
             // Returns:
             //     Returns the new bone, having updated the bone list in the model, and the index for this bone
             private Bone() { }
-            public Bone(Model model, Bone _parent, string _name)
+            public Bone(Model model, Bone _parent, string _name, string _nodeName, string _nodeType)
             {
                 this.transforms = new Dictionary<string, Transform>();
                 if (model.BonesTable.ContainsKey(_name))
@@ -851,6 +873,8 @@ namespace ColladaSlimDX.ColladaModel
                 this.children = new List<Bone>();
                 name = _name;
                 parent = _parent;
+                nodeName = _nodeName;
+                nodeType = _nodeType;
             }
             
         } // ModelBone
@@ -1412,6 +1436,15 @@ namespace ColladaSlimDX.ColladaModel
             //     Current vertex color or the value to be set.
             public bool? VertexColorEnabled { get {return vertexColorEnabled;} set {vertexColorEnabled = value;} }
             private bool? vertexColorEnabled;
+            //
+            // Summary:
+            //     Gets or sets the material name.
+            //
+            // Returns:
+            //     Current diffuse texture value or the value to be set.
+            public string Name { get {return name;} set {name = value;} }
+            private string name;
+            
         } // BasicMaterial
 
         // Summary:
@@ -1835,7 +1868,7 @@ namespace ColladaSlimDX.ColladaModel
             bones = new Dictionary<string, Bone>();
             instanceMeshes = new List<InstanceMesh>();
             instanceCameras = new List<InstanceCamera>();
-            root = new Model.Bone(this,null,scene.id);
+            root = new Model.Bone(this,null,scene.id,scene.name, "VISUAL_SCENE");
 
             foreach (Document.Node node in scene.nodes)
                 root.Children.Add(ReadNode(root, node));
@@ -1863,7 +1896,7 @@ namespace ColladaSlimDX.ColladaModel
         /// </summary>
         private Bone ReadNode(Bone parent, Document.Node node)
         {
-            Bone bone = new Bone(this, parent, node.id);
+            Bone bone = new Bone(this, parent, node.id, node.name, node.type);
 
             if (node.instances != null)
             {
@@ -2033,14 +2066,14 @@ namespace ColladaSlimDX.ColladaModel
 
                         bone.Transforms.Add(transformNode.sid, new Transform(m));
                     }
-                }   
-            }
+                }
 
-            if (node.children != null)
-            {
-                foreach (Document.Node child in node.children)
+                if (node.children != null)
                 {
-                    bone.Children.Add(ReadNode(bone, child));
+                    foreach (Document.Node child in node.children)
+                    {
+                        bone.Children.Add(ReadNode(bone, child));
+                    }
                 }
             }
 
@@ -2115,7 +2148,7 @@ namespace ColladaSlimDX.ColladaModel
             textureBindings[material.id] = textureBinding;
             BasicMaterial materialContent = new BasicMaterial();
             Document.Effect effect = (Document.Effect)doc.dic[material.instanceEffect.Fragment];
-
+			
             if (effect == null) throw new Exception("cannot find effect#" + material.instanceEffect.Fragment);
             // search common profile with correct asset....
             Document.ProfileCOMMON profile;
@@ -2135,7 +2168,8 @@ namespace ColladaSlimDX.ColladaModel
 
             // Read Technique
             Document.SimpleShader shader = ((Document.ProfileCOMMON)profile).technique.shader;
-
+            
+			materialContent.Name = material.name;
             // BasicShader only accept texture for the diffuse channel
             if (shader.diffuse is Document.Texture)
             {
