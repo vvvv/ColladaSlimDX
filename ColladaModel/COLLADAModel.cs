@@ -2067,15 +2067,16 @@ namespace ColladaSlimDX.ColladaModel
                         bone.Transforms.Add(transformNode.sid, new Transform(m));
                     }
                 }
+            }
 
-                if (node.children != null)
+            if (node.children != null)
+            {
+                foreach (Document.Node child in node.children)
                 {
-                    foreach (Document.Node child in node.children)
-                    {
-                        bone.Children.Add(ReadNode(bone, child));
-                    }
+                    bone.Children.Add(ReadNode(bone, child));
                 }
             }
+            
 
             return bone;
 
