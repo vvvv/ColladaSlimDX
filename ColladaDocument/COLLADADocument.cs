@@ -320,7 +320,19 @@ namespace ColladaSlimDX.ColladaDocument
                 count = doc.Get<int>(arrayElement, "count", 0);
 
                 arr = new T[count];
-                string[] stringValues = arrayElement.InnerText.Split(new Char[] { ' ', '\t', '\n', '\r' });
+                string[] stringValues = arrayElement.InnerText.Split(new Char[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                if (count > 0)
+                {
+                    int remainder;
+                    var times = Math.DivRem(stringValues.Length, count, out remainder);
+                    if (times > 1 && remainder == 0)
+                    {
+                        // Wow - a document using spaces inside the keys ...
+                        stringValues = Enumerable.Range(0, count)
+                            .Select(i => string.Join(" ", stringValues.Skip(i * times).Take(times)))
+                            .ToArray();
+                    }
+                }
                 int arrayCount = 0;
                 for (int i = 0; i < stringValues.Length && arrayCount < count; i++)
                 {
@@ -876,8 +888,11 @@ namespace ColladaSlimDX.ColladaDocument
             {
                 get
                 {
-                    if (!isFragment) throw new ColladaException("cannot get Fragment of a non Fragment URI" + this.ToString());
-                    else return url.Fragment.Substring(1);
+                    if (!isFragment)
+                        throw new ColladaException("cannot get Fragment of a non Fragment URI" + this.ToString());
+                    // There're documents with stuff like url="#_01 - Default-fx"
+                    var fragment = Uri.UnescapeDataString(Uri.Fragment);
+                    return fragment.Substring(1);
                     
                 }
             }
