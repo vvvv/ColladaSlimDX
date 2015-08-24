@@ -1607,19 +1607,24 @@ namespace ColladaSlimDX.ColladaDocument
             {
                 foreach (VisualScene vs in doc.visualScenes)
                 {
-                    var result = FindFirstRootJoint(vs.nodes);
+                    var result = FindFirstRootJoint(vs.nodes, "joint");
                     if (result != null)
-                    {
                         return result;
-                    }
                 }
-                
+
+                foreach (VisualScene vs in doc.visualScenes)
+                {
+                    var result = FindFirstRootJoint(vs.nodes, "node");
+                    if (result != null)
+                        return result;
+                }
+
                 return null;
             }
             
-            protected Node FindFirstRootJoint(List<Node> nodes)
+            protected Node FindFirstRootJoint(List<Node> nodes, string type)
             {
-                var result = nodes.FirstOrDefault(n => n.type.ToLower() == "joint");
+                var result = nodes.FirstOrDefault(n => type.Equals(n.type, StringComparison.OrdinalIgnoreCase));
                 if (result != null)
                 {
                     return result;
@@ -1630,7 +1635,7 @@ namespace ColladaSlimDX.ColladaDocument
                     {
                         if (n.children != null)
                         {
-                            result = FindFirstRootJoint(n.children);
+                            result = FindFirstRootJoint(n.children, type);
                             if (result != null)
                             {
                                 return result;
