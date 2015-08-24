@@ -1051,8 +1051,11 @@ namespace ColladaSlimDX.ColladaModel
                 
                 public void Apply(float time)
                 {
-                    float[] val = sampler.Sample(time);
-                    transform.SetElement(targetTransformKey, val);
+                    if (sampler.IsValid)
+                    {
+                        float[] val = sampler.Sample(time);
+                        transform.SetElement(targetTransformKey, val);
+                    }
                 }
             }
             
@@ -1105,8 +1108,11 @@ namespace ColladaSlimDX.ColladaModel
                                 break;
                             case "INPUT":
                                 inputs = (source.array as Document.Array<float>).arr;
-                                startTime = inputs[0];
-                                endTime = inputs[inputs.Length - 1];
+                                if (inputs.Length > 0)
+                                {
+                                    startTime = inputs[0];
+                                    endTime = inputs[inputs.Length - 1];
+                                }
                                 break;
                             case "OUTPUT":
                                 output = input;
@@ -1132,6 +1138,11 @@ namespace ColladaSlimDX.ColladaModel
                         for (int i = 0; i < interpolations.Length; i++)
                             interpolations[i] = EInterpolation.LINEAR;
                     }
+                }
+
+                public bool IsValid
+                {
+                    get { return inputs.Length > 0; }
                 }
                 
                 public float[] Sample(float time)
