@@ -1540,20 +1540,23 @@ namespace ColladaSlimDX.ColladaModel
         {
             private CSkinnedMesh skinnedMesh;
 
-            private Bone rootBone;
             public Bone RootBone
             {
                 get
                 {
-                    if (rootBone == null)
+                    if (!rootLoaded)
                     {
                         LoadBones();
-                        rootBone = bones.Select(b => b.Parent).First(p => !bones.Contains(p));
+                        rootLoaded = true;
+                        rootBone = bones.Where(b => !bones.Contains(b.Parent))
+                            .FirstOrDefault();
                     }
                     return rootBone;
                 }
             }
-            
+            Bone rootBone;
+            bool rootLoaded;
+
             private List<Bone> bones;
             public List<Bone> Bones
             {
