@@ -13,6 +13,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>b86ef816-b23d-41c7-b456-3b4d2beda2fa</ProjectGuid>
     <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+    <NuProjPath>$(MsBuildThisFileDirectory)packages\NuProj.0.10.4-beta-gf7fc34e7d8\tools\</NuProjPath>
   </PropertyGroup>
   <PropertyGroup>
     <NuProjPath Condition=" '$(NuProjPath)' == '' ">$(MSBuildExtensionsPath)\NuProj\</NuProjPath>
