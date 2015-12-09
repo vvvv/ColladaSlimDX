@@ -1,7 +1,5 @@
-﻿using SlimDX;
-using DNMatrix = dnAnalytics.LinearAlgebra.Matrix;
-using DNMatrixImpl = dnAnalytics.LinearAlgebra.DenseMatrix;
-using DNSolver = dnAnalytics.LinearAlgebra.Solvers.Direct.LUSolver;
+﻿using MathNet.Numerics.LinearAlgebra;
+using SlimDX;
 
 namespace ColladaSlimDX.Utils
 {
@@ -160,10 +158,7 @@ namespace ColladaSlimDX.Utils
 			CoordinateSystem Source,
 			CoordinateSystem Target)
 		{
-			DNSolver solver = new DNSolver();
-			DNMatrix conversionMatrix = solver.Solve(
-				MatrixToDNMatrix(Source.Matrix),
-				MatrixToDNMatrix(Target.Matrix));
+            var conversionMatrix = MatrixToDNMatrix(Source.Matrix).LU().Solve(MatrixToDNMatrix(Target.Matrix));
 			return DNMatrixToMatrix(conversionMatrix);
 		}
 		
@@ -181,10 +176,10 @@ namespace ColladaSlimDX.Utils
 			matrix[2, 2] = inward.Z / meter;
 		}
 				
-		private static DNMatrix MatrixToDNMatrix(Matrix m)
+		private static Matrix<float> MatrixToDNMatrix(Matrix m)
 		{
-			return new DNMatrixImpl(
-				new double[,] {
+			return CreateMatrix.DenseOfArray(
+				new float[,] {
 					{ m[0,0], m[0,1], m[0,2], m[0,3] },
 					{ m[1,0], m[1,1], m[1,2], m[1,3] },
 					{ m[2,0], m[2,1], m[2,2], m[2,3] },
@@ -192,14 +187,14 @@ namespace ColladaSlimDX.Utils
 				});
 		}
 		
-		private static Matrix DNMatrixToMatrix(DNMatrix m)
+		private static Matrix DNMatrixToMatrix(Matrix<float> m)
 		{
 			Matrix result = new Matrix();
-			for (int row = 0; row < m.Rows; row++)
+			for (int row = 0; row < m.RowCount; row++)
 			{
-				for (int col = 0; col < m.Columns; col++)
+				for (int col = 0; col < m.ColumnCount; col++)
 				{
-					result[row, col] = (float) m[row, col];
+					result[row, col] = m[row, col];
 				}
 			}
 			return result;
